@@ -1,0 +1,5 @@
+package br.com.pablo.exceptions.handler;
+
+public class CustomizedResponsedEntityExceptionHandler {
+
+}
