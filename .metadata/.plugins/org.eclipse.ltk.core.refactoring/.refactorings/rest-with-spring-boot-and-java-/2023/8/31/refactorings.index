@@ -2,3 +2,11 @@
 1690872223086	Rename type 'MathController'
 1690931894487	Rename resource 'application.properties'
 1690934113574	Rename type 'UnsuportedMathOperationException'
+1691020363097	Copy compilation unit
+1691020378025	Rename type 'Person'
+1691254924213	Copy package
+1691254950239	Rename type 'PersonVO'
+1691255794803	Rename type 'personMapper'
+1691259138087	Copy file
+1691259758444	Rename resource 'V1_Create_Table_Person.sql'
+1691259765202	Rename resource 'V2_Populate_Table_Person.sql'

@@ -1,0 +1,9 @@
+package br.com.pablo.mapper;
+
+import com.github.dozermapper.core.mapper;
+
+public class DozerMapper {
+	
+	private static Mapper mapper =  
+
+}

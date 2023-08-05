@@ -1,0 +1,5 @@
+package br.com.pablo.mapper;
+
+public class DozerMapper {
+
+}
