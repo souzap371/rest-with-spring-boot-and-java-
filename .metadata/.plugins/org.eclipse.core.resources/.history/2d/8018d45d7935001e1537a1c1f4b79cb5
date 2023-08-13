@@ -1,0 +1,61 @@
+package br.ufrn.imd.solicitacaurn.mkdata.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.mkdata.domain.Agendas;
+
+public interface AgendasRepositoryMkdata extends JpaRepository<Agendas, Long> {
+
+	@Query(value = " SELECT * FROM AGENDAS a " 
+	+ "WHERE a.medico_id = ?1 AND "
+	+ "a.paciente_id IS NULL AND a.situacao_id = 1 AND a.consultorio_id = ?2 AND a.espec_id = ?3 " 
+	+ "AND TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL > TO_CHAR(SYSDATE, 'yyyy-MM-DD HH24:MI:SS') " 
+	+ "AND TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL < TO_CHAR(SYSDATE + INTERVAL '30' DAY, 'yyyy-MM-DD HH24:MI:SS') "
+	+ "ORDER BY TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL ASC",nativeQuery = true)
+	public List<Agendas> getAgendasDisponiveis(long idMedico, long idConsultorio, long idEspecialidade);
+	//Retorna agendas disponíveis num intervalo de 30 dias.
+
+	@Query(value = "SELECT * FROM AGENDAS a\r\n"
+			+ "INNER JOIN PACIENTES p ON p.ID = a.PACIENTE_ID  \r\n"
+			+ "INNER JOIN PACIENTEXCARTOES p2 ON p.ID = p2.PACIENTE_ID \r\n"
+			+ "WHERE p2.CARTAO = ?1 \r\n"
+			+ "AND TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL > TO_CHAR(SYSDATE - INTERVAL '90' DAY, 'yyyy-MM-DD HH24:MI:SS') \r\n"
+			+ "AND TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL < TO_CHAR(SYSDATE + INTERVAL '31' DAY, 'yyyy-MM-DD HH24:MI:SS') \r\n"
+			+ "ORDER BY a.dt_agenda DESC", nativeQuery = true)
+	public List<Agendas> getAgendasByPacienteAndCodigoBeneficiario(String codigoBeneficiario);
+	//Retorna agendas do paciente, de 90 dias atrás até 31 dias após a data atual.	
+
+	@Query(value = "SELECT * FROM AGENDAS a\r\n"
+		+ "INNER JOIN PACIENTES p ON p.ID = a.PACIENTE_ID  \r\n"
+		+ "INNER JOIN PACIENTEXCARTOES p2 ON p.ID = p2.PACIENTE_ID \r\n"
+		+ "WHERE p2.CARTAO = ?1 AND a.SITUACAO_ID != 5 \r\n"
+		+ "ORDER BY a.dt_agenda DESC", nativeQuery = true)
+	public List<Agendas> getAgendasByPacienteAndCodigoBeneficiarioNaoCanceladas(String codigoBeneficiario);
+
+	@Query(value = "SELECT * FROM AGENDAS a\r\n"
+			+ "INNER JOIN PACIENTES p ON p.ID = a.PACIENTE_ID  \r\n"
+			+ "INNER JOIN PACIENTEXCARTOES p2 ON p.ID = p2.PACIENTE_ID \r\n"
+			+ "WHERE p2.CARTAO in (?1) \r\n"
+			+ "AND TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL > TO_CHAR(SYSDATE - INTERVAL '90' DAY, 'yyyy-MM-DD HH24:MI:SS') \r\n"
+			+ "AND TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL < TO_CHAR(SYSDATE + INTERVAL '31' DAY, 'yyyy-MM-DD HH24:MI:SS') \r\n"			
+			+ "ORDER BY a.dt_agenda DESC", nativeQuery = true)
+	public List<Agendas> getAgendasByFamilia(List<String> codigoBeneficiarioList);
+
+	@Query(value="SELECT *  FROM AGENDAS a WHERE a.situacao_id = 3 AND a.PACIENTE_ID IS NOT NULL \n"
+			+ "	AND  TO_CHAR(SYSDATE,'yyyy-MM-DD HH24:MI:SS') < TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL \n"
+			+ "	AND ( \n"
+			+ "	TO_CHAR(a.dt_agenda, 'yyyy-MM-dd')||' ' ||a.HR_INICIAL \n"
+			+ "	BETWEEN TO_CHAR(SYSDATE,'yyyy-MM-DD HH24:MI:SS') AND TO_CHAR(SYSDATE + INTERVAL '24' HOUR,'yyyy-MM-DD HH24:MI:SS')\n"
+			+ "	)", nativeQuery = true)
+	public List<Agendas> getByTimeFor24h();
+	//Retorna agendas no estado AGENDADO nas próximas 24 horas, para envio de notificação aos usuários.
+
+	@Query(value = "SELECT COUNT(*) FROM AGENDAS a " 
+		+ "WHERE a.medico_id = ?1 AND a.situacao_id = 5 AND a.consultorio_id = ?2 AND a.espec_id = ?3 "
+		+ "AND a.DT_AGENDA = TO_DATE(?4, 'yyyy-MM-dd') AND a.HR_INICIAL > ?5 AND a.HR_INICIAL < ?6",nativeQuery = true)
+	public Integer getCountAgendasCanceladasByHorario(long idMedico, long idConsultorio, long idEspecialidade, String dataAgenda, String horaInicio, String horaFim);
+	//Retorna a quantidade de vezes que uma agenda foi cancelada, para poder inserir uma nova agenda cancelada em um horário futuro.
+}

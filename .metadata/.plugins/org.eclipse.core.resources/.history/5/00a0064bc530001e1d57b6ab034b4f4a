@@ -1,5 +1,0 @@
-package br.com.pablo.repositories;
-
-public interface PersonRepository {
-
-}

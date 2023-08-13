@@ -1,9 +1,0 @@
-package br.com.pablo.mapper;
-
-
-
-public class DozerMapper {
-	
-	private static Mapper mapper =  
-
-}

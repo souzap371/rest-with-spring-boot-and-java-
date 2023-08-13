@@ -1,0 +1,227 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import br.com.mkapi.firebase.domain.PushNotificationRequest;
+import br.com.mkapi.service.PushNotificationService;
+import br.com.mkapi.solus.domain.Noticia;
+import br.com.mkapi.solus.domain.UsuarioSolusAppMob;
+import br.com.mkapi.solus.repository.NoticiaRepository;
+import br.com.mkapi.solus.repository.UsuarioSolusAppMobRepository;
+
+@RestController
+@RequestMapping("/api/solus/noticia")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class NoticiaController {
+    @Autowired
+	private NoticiaRepository noticiaRepository;
+
+	@Autowired
+	private PushNotificationService pushNotificationService;	
+
+	@Autowired
+	private UsuarioSolusAppMobRepository usuarioSolusAppMobRepository;	
+
+    @GetMapping("getAll/{offset}")
+	public ResponseEntity<List<Noticia>> getAll(@PathVariable(value = "offset") Integer offset) {
+		List<Noticia> list = noticiaRepository.findAllOrderByDate(offset);
+		
+		return new ResponseEntity<>(list, HttpStatus.OK);
+	}
+
+
+	/*
+	 * Caso o usuário não tenha fechado a notícia em destaque, é
+	 * retornada a notícia em destaque mais recente cadastrada.
+	 */
+    @GetMapping("findRecenteDestaqueByIdUsuario/{id}")
+	public ResponseEntity<?> findRecenteDestaqueByIdUsuario(@PathVariable(value = "id") Long id) {
+		Optional<UsuarioSolusAppMob> opt = usuarioSolusAppMobRepository.findById(id);
+		
+		if(opt.isPresent()){
+			UsuarioSolusAppMob user = opt.get();
+			if(user.getVerNoticiaDestaque() != null && user.getVerNoticiaDestaque()){
+				Noticia noticia = noticiaRepository.findRecenteDestaque();
+
+				return new ResponseEntity<>(noticia, HttpStatus.OK);
+			} else{
+				return new ResponseEntity<>(null, HttpStatus.OK);
+			}
+		}
+		else{
+			return new ResponseEntity<>("Usuário não encontrado.", HttpStatus.FORBIDDEN);
+		}
+	}			
+
+    @GetMapping("getByIdNoticia/{id}")
+	public ResponseEntity<Noticia> getByIdNoticia(@PathVariable(value = "id") Long id) {
+		Optional<Noticia> opt = noticiaRepository.findByIdAtivo(id);
+		
+		if(opt.isPresent()){
+			Noticia noticia = opt.get();
+
+			return new ResponseEntity<>(noticia, HttpStatus.OK);
+		}
+		else{
+			return new ResponseEntity<>(null, HttpStatus.OK);
+		}
+	}		
+
+	@PostMapping("setVerNoticiaDestaqueFalse/{id}")
+	public ResponseEntity<?> setNoticiaDestaqueVisualizada(@PathVariable(value = "id") Long id) {
+		Optional<UsuarioSolusAppMob> opt = usuarioSolusAppMobRepository.findById(id);
+		
+		if(opt.isPresent()){
+			UsuarioSolusAppMob user = opt.get();
+			user.setVerNoticiaDestaque(false);
+			user = usuarioSolusAppMobRepository.save(user);
+
+			return new ResponseEntity<>(null, HttpStatus.OK);
+		}
+		else{
+			return new ResponseEntity<>("Usuário não encontrado.", HttpStatus.FORBIDDEN);
+		}
+	}	
+
+    @PostMapping(
+        consumes = {MediaType.MULTIPART_FORM_DATA_VALUE},
+        produces = {MediaType.APPLICATION_JSON_VALUE} )
+    public ResponseEntity<String> post(Noticia noticia) {
+		if(noticia != null){
+            Calendar calendar = Calendar.getInstance();
+            noticia.setDataPostagem(calendar.getTime());
+            noticia.setAtivo(1);
+
+			if(noticia.getDataApresentacaoTemp() != null){
+				try {
+					Date d = new SimpleDateFormat("dd/MM/yyyy").parse(noticia.getDataApresentacaoTemp());
+					noticia.setDataApresentacao(d);
+				} catch (ParseException e) {
+					return new ResponseEntity<>("Formato incorreto para o campo dataApresentacaoTemp.", HttpStatus.FORBIDDEN);
+				}  
+			}
+
+            try {
+                noticia.setImagem(noticia.getImagemMultipart().getBytes());
+            } catch (IOException e) {
+                e.printStackTrace();
+				return new ResponseEntity<>("Erro ao cadastrar imagem da notícia.", HttpStatus.FORBIDDEN);
+            }
+
+			if(noticia.getDestaque() == null) noticia.setDestaque(false);
+            
+            noticia = noticiaRepository.save(noticia);
+
+			/* 
+			 * Envia notificação para todos os usuários, ao
+			 * ser cadastrada uma nova notícia com destaque.
+			*/
+			List<UsuarioSolusAppMob> users = usuarioSolusAppMobRepository.findAll();
+			List<String> tokesEnviados = new ArrayList<String>();
+
+			for(UsuarioSolusAppMob u : users){
+				if(!Objects.isNull(u.getFirebaseToken()) && !tokesEnviados.contains(u.getFirebaseToken())){
+					PushNotificationRequest msg = new PushNotificationRequest();
+					msg.setTitle("Nova notícia na CAURN.");
+					msg.setMessage(noticia.getTitulo());					
+					msg.setToken(u.getFirebaseToken());
+					msg.setIdNoticia(noticia.getId());
+					msg.setIdUsuario(u.getId());
+					tokesEnviados.add(u.getFirebaseToken());
+					pushNotificationService.sendPushNotificationToToken(msg);
+				}
+			}
+
+			/* 
+			 * Se a nova notícia for uma notícia em destaque,
+			 * é configurado para que todos os usuários
+			 * voltem a ver a notícia no menu principal.
+			*/
+			if(noticia.getDestaque()){
+				usuarioSolusAppMobRepository.updateVerNoticiaDestaque();
+			}
+
+			return new ResponseEntity<>("Notícia cadastrada com sucesso.", HttpStatus.OK);
+		}
+		else
+			return new ResponseEntity<>("É necessário informar os dados da notícia.", HttpStatus.FORBIDDEN);
+    }
+
+    @PostMapping("/{id}")
+	public ResponseEntity<Object> update(@RequestBody Noticia noticia, @PathVariable(value = "id") Long id){
+		Optional<Noticia> opt = noticiaRepository.findById(id);
+		if(opt.isPresent()){
+            Noticia n = opt.get();
+
+            n.setAutor(noticia.getAutor());
+            n.setConteudo(noticia.getConteudo());
+            n.setImagem(noticia.getImagem());
+            n.setStatusNoticia(noticia.getStatusNoticia());
+            n.setSubTitulo(noticia.getSubTitulo());
+            n.setTitulo(noticia.getTitulo());
+			n.setDestaque(noticia.getDestaque());
+			n.setDataApresentacao(noticia.getDataApresentacao());
+
+			n = noticiaRepository.save(n);
+			return new ResponseEntity<>(n, HttpStatus.OK);
+		}
+		else
+			return new ResponseEntity<>("Notícia não encontrada.", HttpStatus.FORBIDDEN);
+	}
+
+    @PostMapping("/inativarNoticia/{id}")
+	public ResponseEntity<Object> inativarNoticia(@PathVariable(value = "id") Long id) {
+		try{
+			noticiaRepository.setInativoById(id);
+
+			return new ResponseEntity<>("Notícia inativada com sucesso.", HttpStatus.OK);
+		}
+		catch(Exception e){
+			return new ResponseEntity<>("Erro na inativação da notícia.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}	    
+
+    @PostMapping("/ativarNoticia/{id}")
+	public ResponseEntity<Object> ativarNoticia(@PathVariable(value = "id") Long id) {
+		try{
+			noticiaRepository.setAtivoById(id);
+
+			return new ResponseEntity<>("Notícia ativada com sucesso.", HttpStatus.OK);
+		}
+		catch(Exception e){
+			return new ResponseEntity<>("Erro na ativação da notícia.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}	      
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<Noticia> delete(@PathVariable(value = "id") Long id){
+		Optional<Noticia> opt = noticiaRepository.findById(id);
+		if(!opt.isPresent())
+			return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+		else{
+			noticiaRepository.deleteById(id);
+			return new ResponseEntity<>(HttpStatus.OK);	
+		}
+	}      
+}

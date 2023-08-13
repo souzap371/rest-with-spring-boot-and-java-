@@ -1,0 +1,12 @@
+package br.ufrn.imd.solicitacaurn.mkdata.repository;
+
+import java.util.List;
+
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.mkdata.domain.Telemedicina;
+
+@Repository
+public interface TelemedicinaCustomRepository {
+	List<Telemedicina> findAllTelemedicinaByPaciente(String codigoBeneficiario, Integer offset);
+}

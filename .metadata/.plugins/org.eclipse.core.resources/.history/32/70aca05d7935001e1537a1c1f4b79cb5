@@ -1,0 +1,102 @@
+package br.ufrn.imd.solicitacaurn.cassi.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.solus.domain.BeneficiarioSolus;
+import br.com.mkapi.solus.domain.UsuarioSolusAppMob;
+import br.com.mkapi.solus.repository.BeneficiarioSolusRepository;
+import br.com.mkapi.solus.repository.UsuarioSolusAppMobRepository;
+
+import java.util.Calendar;
+import java.util.Optional;
+
+@Controller
+@RequestMapping("/api/cassi/autorizacaoCassi")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class AutorizacaoCassiController {
+    
+    @Autowired
+    private UsuarioSolusAppMobRepository usuarioSolusAppMobRepository;
+
+	@Autowired
+	private BeneficiarioSolusRepository beneficiarioSolusRepository;    
+
+    //Se o usuário titular estiver autorizado, o acesso de seus dependentes e agregados também está autorizado.
+    @GetMapping("/obterAutorizacaoUsuarioCassi/{codigoBeneficiario}")
+	public ResponseEntity<?> obterAutorizacaoUsuarioCassi(@PathVariable(value = "codigoBeneficiario") String codigoBeneficiario) {
+        try{
+            Optional<BeneficiarioSolus> optBeneficiarioDep = beneficiarioSolusRepository.findByNumcarteira(codigoBeneficiario);
+
+            if(optBeneficiarioDep.isPresent()){
+
+                BeneficiarioSolus beneficiario = optBeneficiarioDep.get();
+
+                if(beneficiario.getCpfTitular() != null){
+                    Optional<BeneficiarioSolus> optBeneficiarioTitular = beneficiarioSolusRepository.findByCpfDependente(beneficiario.getCpfTitular());
+
+                    if(optBeneficiarioTitular.isPresent()){
+                        BeneficiarioSolus beneficiarioTitular = optBeneficiarioTitular.get();
+
+                        UsuarioSolusAppMob usuario = usuarioSolusAppMobRepository.findByIdSolus(beneficiarioTitular.getChaveBeneficiario());
+
+                        if(usuario != null){
+                            return new ResponseEntity<>(usuario.getAutorizacaoCassi() != null ? usuario.getAutorizacaoCassi() : false, HttpStatus.OK);
+                        } else{
+                            return new ResponseEntity<>("Usuário titular não encontrado.", HttpStatus.FORBIDDEN);
+                        }
+                    } else {
+                        return new ResponseEntity<>("Beneficiário titular não encontrado.", HttpStatus.FORBIDDEN);
+                    }
+                } else {
+                    return new ResponseEntity<>("Beneficiário titular não encontrado.", HttpStatus.FORBIDDEN);
+                }
+            } else{
+                return new ResponseEntity<>("Beneficiário não encontrado.", HttpStatus.FORBIDDEN);
+            }
+        } catch(Exception e){
+            e.printStackTrace();
+            return new ResponseEntity<>("Erro ao obter autorização do beneficiário titular.", HttpStatus.FORBIDDEN);
+        }
+	}
+
+    @PostMapping("/autorizarUsuarioCassi/{codigoBeneficiario}")
+	public ResponseEntity<?> autorizarUsuarioCassi(@PathVariable(value = "codigoBeneficiario") String codigoBeneficiario) {
+        try{
+            Optional<BeneficiarioSolus> optBeneficiario = beneficiarioSolusRepository.findByNumcarteira(codigoBeneficiario);
+
+            if(optBeneficiario.isPresent()){
+                BeneficiarioSolus beneficiario = optBeneficiario.get();
+
+                if (beneficiario.getTipoBeneficiario().equalsIgnoreCase("Titular")) {
+                    UsuarioSolusAppMob u = usuarioSolusAppMobRepository.findByIdSolus(beneficiario.getChaveBeneficiario());
+
+                    if(u != null){
+                        Calendar calendar = Calendar.getInstance();
+                        u.setAutorizacaoCassi(true);
+                        u.setDataAutorizacaoCassi(calendar.getTime());
+                        usuarioSolusAppMobRepository.save(u);
+                        return new ResponseEntity<>("Chave familiar autorizada com sucesso.", HttpStatus.OK);
+                    } else{
+                        return new ResponseEntity<>("Usuário não encontrado.", HttpStatus.FORBIDDEN);
+                    }
+                } else{
+                    return new ResponseEntity<>("Apenas o titular pode autorizar o acesso ao módulo CASSI.", HttpStatus.FORBIDDEN);    
+                }
+
+            } else{
+                return new ResponseEntity<>("Beneficiário não encontrado.", HttpStatus.FORBIDDEN);
+            }
+        } catch(Exception e){
+            e.printStackTrace();
+            return new ResponseEntity<>("Erro ao autorizar acesso ao módulo cassi.", HttpStatus.FORBIDDEN);
+        }
+	}
+}

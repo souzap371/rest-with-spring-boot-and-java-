@@ -1,0 +1,450 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Random;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+import org.apache.poi.util.SystemOutLogger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.WebAuthenticationDetails;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.google.api.client.util.Base64;
+
+import br.com.mkapi.exception.ApiException;
+import br.com.mkapi.service.ArquivoService;
+import br.com.mkapi.service.jwt.AccountCredentials;
+import br.com.mkapi.service.jwt.TokenAuthenticationService;
+import br.com.mkapi.solus.domain.ArquivoSolus;
+import br.com.mkapi.solus.domain.BeneficiarioSolus;
+import br.com.mkapi.solus.domain.UsuarioSolusAppMob;
+import br.com.mkapi.solus.domain.enums.TipoUsuario;
+import br.com.mkapi.solus.domain.holder.UsuarioHolder;
+import br.com.mkapi.solus.repository.BeneficiarioSolusRepository;
+import br.com.mkapi.solus.repository.UsuarioSolusAppMobRepository;
+import br.com.mkapi.solusbd.domain.UsuarioSolus;
+import br.com.mkapi.solusbd.repository.UsuarioSolusRepository;
+import br.com.mkapi.utils.EmailHelper;
+import br.com.mkapi.utils.Response;
+
+@Controller
+@RequestMapping("/api/solus/usuario")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class UsuarioSolusController {
+
+	@Autowired
+	private UsuarioSolusAppMobRepository repository;
+
+	@Autowired
+	private PasswordEncoder encoder;
+
+	@Autowired
+	private EmailHelper emailHelper;
+
+	@Autowired
+	private ArquivoService arquivoService;
+
+	@Autowired
+	private AuthenticationManager authenticationProvider;
+
+	@Autowired
+	private UsuarioHolder usuarioHolder;
+
+	@Autowired
+	private BeneficiarioSolusRepository beneficiarioSolusRepository;
+
+	@Autowired
+	private UsuarioSolusRepository solusBDRepository;
+
+	@PostMapping("/{idUsuarioSolus}/updateProfileAvatar")
+	public ResponseEntity<Response> updateProfileAvatar(@PathVariable("idUsuarioSolus") Long idUsuarioSolus,
+			@RequestParam("avatar") MultipartFile file) {
+		UsuarioSolusAppMob user = repository.findByIdSolus(idUsuarioSolus);
+		ArquivoSolus arquivo = new ArquivoSolus();
+		arquivo.setNomeArquivo(file.getName());
+		arquivo.setNomeOriginal(file.getOriginalFilename());
+		arquivo.setTamanho(file.getSize());
+		arquivo.setFormato(arquivoService.gerarExtensao(file.getOriginalFilename()));
+
+		UsuarioSolus userSolus = solusBDRepository.findById(idUsuarioSolus).get();
+		
+		if (Objects.isNull(userSolus)) {
+			return new ResponseEntity<>(new Response(null, "Usuário não encontrado ou inativo."), HttpStatus.FORBIDDEN);
+		}
+
+		try {
+			userSolus.setImage(file.getBytes());
+			solusBDRepository.save(userSolus);
+		} catch (IOException e) {
+			return new ResponseEntity<>(new Response(null, "Problema ao processar arquivo."), HttpStatus.FORBIDDEN);
+		}
+
+		return new ResponseEntity<>(new Response(user, "Avatar atualizado com sucesso"), HttpStatus.OK);
+	}
+
+	@PostMapping("/loginViaSolus")
+	public ResponseEntity<Response> loginViaSolus(@RequestBody AccountCredentials credenciais,
+			HttpServletResponse response, HttpServletRequest request) {
+		try {
+			BeneficiarioSolus beneficiario;
+
+			if(credenciais.getUsername().replaceAll("\\.|-", "").length() > 6){
+				beneficiario = beneficiarioSolusRepository.findByCpfDependente(credenciais.getUsername().replaceAll("\\.|-", ""))
+				.orElse(null);
+			} else{
+				beneficiario = beneficiarioSolusRepository.findByNumcarteira(credenciais.getUsername().replaceAll("\\.|-", ""))
+				.orElse(null);
+			}
+
+			if (Objects.isNull(beneficiario)) {
+				return new ResponseEntity<>(new Response(null, "Usuário não encontrado ou inativo."), HttpStatus.FORBIDDEN);
+			}
+
+			if (!beneficiario.getSenha().equals(credenciais.getPassword())) {
+				return new ResponseEntity<>(new Response(null, "Senha incorreta."), HttpStatus.FORBIDDEN);
+			}
+
+			UsuarioSolusAppMob user = repository.findByIdSolus(beneficiario.getChaveBeneficiario());
+
+			if (Objects.isNull(user)) {
+				//Usuário está logando pela primeira vez no APP.
+				user = new UsuarioSolusAppMob();
+
+				user.setCodigoSolus(beneficiario.getCodigoBeneficiario());
+				user.setIdSolus(beneficiario.getChaveBeneficiario());
+				user.setEmail(beneficiario.getEmailTitular());
+				user.setDataNascimento(beneficiario.getDataNascimento());
+				user.setTipoUsuario(TipoUsuario.valueOf(beneficiario.getTipoBeneficiario().toUpperCase()));
+				user.setChaveFamiliarSolus(beneficiario.getChaveFamilia());
+				user.setSenhaPadrao(false);
+				repository.save(user);
+			}
+
+			UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(
+				beneficiario.getCodigoBeneficiario(), credenciais.getPassword());
+			TokenAuthenticationService.addAuthentication(response, beneficiario.getCodigoBeneficiario());
+			token.setDetails(new WebAuthenticationDetails(request));
+			Authentication authentication = authenticationProvider.authenticate(token);
+
+			SecurityContext securityContext = SecurityContextHolder.getContext();
+			securityContext.setAuthentication(authentication);
+
+			UsuarioSolusAppMob u = usuarioHolder.getUsuario();
+			HttpSession session = request.getSession(true);
+			session.setAttribute("SPRING_SECURITY_CONTEXT", securityContext);
+
+			if (!Objects.isNull(credenciais.getFirebaseToken())) {
+				u.setFirebaseToken(credenciais.getFirebaseToken());
+				repository.save(u);
+			}
+
+			UsuarioSolus userSolus = solusBDRepository.findById(user.getIdSolus()).get();
+
+			/*
+			 * Caso o usuário possua uma foto de perfil cadastrada no Solus, 
+			 * esta é escolhida com prioridade.
+			 * Caso contrário, é verificado se o usuário possui uma imagem
+			 * no AppMob.
+			 */
+			if (userSolus.getImage() != null) {
+				user.setAvatar(new ArquivoSolus());
+				user.getAvatar().setBase64(Base64.encodeBase64String(userSolus.getImage()));
+			} else if(user.getAvatar() != null && user.getAvatar().getPath() != null){
+				byte[] imageBytes;
+
+				try {
+					imageBytes = Files.readAllBytes(Paths.get(user.getAvatar().getPath()));
+					if(imageBytes != null){
+						userSolus.setImage(imageBytes);
+						solusBDRepository.save(userSolus);
+
+						user.setAvatar(new ArquivoSolus());
+						user.getAvatar().setBase64(Base64.encodeBase64String(userSolus.getImage()));
+					}
+				} catch (IOException e) {
+
+				}
+			}
+			
+			if(beneficiario.getEmailUsuario() != null){
+				user.setEmail(beneficiario.getEmailUsuario());
+			} else if(beneficiario.getEmailTitular() != null){
+				user.setEmail(beneficiario.getEmailTitular());
+			}
+
+			List<BeneficiarioSolus> familia = new ArrayList<BeneficiarioSolus>();
+
+			//Monta chave familiar do usuário.
+			if (beneficiario.getTipoBeneficiario().equalsIgnoreCase("Titular")) {
+				familia = beneficiarioSolusRepository.findByCpfTitularToTitular(beneficiario.getCpfTitular());
+			} else {
+				familia = beneficiarioSolusRepository.findByChaveFamiliaToNotTitular(beneficiario.getChaveFamilia(),
+						beneficiario.getChaveBeneficiario());
+			}
+
+			user.setGrupoFamiliar(familia);
+			user.setBeneficiario(beneficiario);
+			user.setCpf(beneficiario.getCpfDependente());
+
+			return new ResponseEntity<>(new Response(user, "Login realizado com sucesso"), HttpStatus.OK);
+
+		} catch (ApiException e) {
+			System.out.println("ERRO É: ");
+			System.out.println(e);
+			return new ResponseEntity<>(new Response(null, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+
+	}
+
+	@PostMapping("/getByIdSolus")
+	public ResponseEntity<Response> getByIdSolus(@RequestBody BeneficiarioSolus b) {
+		try {
+			UsuarioSolusAppMob u = repository.findByIdSolus(b.getChaveBeneficiario());
+			UsuarioSolus userSolus = solusBDRepository.findById(b.getChaveBeneficiario()).get();
+			if (!Objects.isNull(u)) {
+				if (userSolus.getImage() != null) {
+					u.setAvatar(new ArquivoSolus());
+					u.getAvatar().setBase64(Base64.encodeBase64String(userSolus.getImage()));
+				}
+				
+				if(!Objects.isNull(userSolus)){
+					u.setEmail(userSolus.getEmail());
+				}
+				
+				u.setBeneficiario(b);
+				u.setCpf(b.getCpfDependente());
+				return new ResponseEntity<>(new Response(u, "Usuário encontrado com sucesso"), HttpStatus.OK);
+			} else {
+				u = new UsuarioSolusAppMob();
+				u.setCodigoSolus(b.getCodigoBeneficiario());
+				u.setIdSolus(b.getChaveBeneficiario());
+				u.setEmail(b.getEmailTitular());
+				u.setDataNascimento(b.getDataNascimento());
+				u.setTipoUsuario(TipoUsuario.valueOf(b.getTipoBeneficiario().toUpperCase()));
+				u.setChaveFamiliarSolus(b.getChaveFamilia());
+				u.setSenhaPadrao(false);
+
+				if(!Objects.isNull(userSolus)){
+					u.setEmail(userSolus.getEmail());
+				}
+
+				repository.save(u);
+				u.setBeneficiario(b);
+				u.setCpf(b.getCpfDependente());
+				return new ResponseEntity<>(new Response(u, "Usuário encontrado com sucesso"), HttpStatus.OK);
+			}
+
+		} catch (ApiException e) {
+			return new ResponseEntity<>(new Response(null, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+
+	}
+
+	@PostMapping("/logout")
+	public ResponseEntity<Response> realizarLogout(@RequestBody UsuarioSolusAppMob usuario) {
+		Optional<UsuarioSolusAppMob> u = repository.findById(usuario.getId());
+
+		if (u.isPresent()) {
+			u.get().setFirebaseToken(null);
+			repository.save(u.get());
+			return new ResponseEntity<>(new Response(null, "Logout realizado com sucesso"), HttpStatus.OK);
+		} else {
+			return new ResponseEntity<>(new Response(null, "Erro ao realizar logout"),
+					HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	@PostMapping("/gerarNovoCodigo")
+	public ResponseEntity<Response> gerarNovoCodigo(@RequestBody UsuarioSolusAppMob usuario) {
+		Optional<UsuarioSolusAppMob> u = repository.findById(usuario.getId());
+		if (u.isPresent()) {
+			String cod = "";
+			Random random = new Random();
+			for (int i = 0; i < 5; i++) {
+				cod += random.nextInt(9) + "";
+			}
+			u.get().setCodRecuperacao(cod);
+			
+			try{
+				emailHelper.enviaEsqueciMinhaSenhaEmail(u.get());
+			} catch(Exception e){
+				return new ResponseEntity<>(new Response(null, e.getMessage()), HttpStatus.FORBIDDEN);
+			}
+
+			repository.save(u.get());
+			return new ResponseEntity<>(new Response(u.get(), "Dados válidos"), HttpStatus.OK);
+		} else {
+			return new ResponseEntity<>(new Response(null, "Dados inválidos"), HttpStatus.FORBIDDEN);
+		}
+
+	}
+
+	@PostMapping("/validarDados")
+	public ResponseEntity<Response> validarDados(@RequestBody UsuarioSolusAppMob usuario) {
+		DateFormat dtf = new SimpleDateFormat("yyyy-MM-dd");
+		try {
+			validateUserTrocaSenha(usuario);
+			Optional<UsuarioSolusAppMob> user = Optional.empty();
+
+			if (usuario.getCodigoSolus().replaceAll("\\.|-", "").length() <= 6) {
+				user = repository.findUserAppMobByCodigoSolus(usuario.getCodigoSolus().replaceAll("\\.|-", ""));
+			} else {
+				Optional<BeneficiarioSolus> beneficiario = beneficiarioSolusRepository.findByCpfDependente(usuario.getCodigoSolus().replaceAll("\\.|-", ""));
+				if (beneficiario.isPresent()) {
+					String codigoBeneficiario = beneficiario.get().getCodigoBeneficiario();
+					user = repository.findUserAppMobByCodigoSolus(codigoBeneficiario);
+				}
+			}
+
+			if (!user.isPresent()) {
+				Optional<BeneficiarioSolus> beneficiario;
+				if(usuario.getCodigoSolus().replaceAll("\\.|-", "").length() > 6){
+					beneficiario = beneficiarioSolusRepository.findByCpfDependente(usuario.getCodigoSolus().replaceAll("\\.|-", ""));
+				} else{
+					beneficiario = beneficiarioSolusRepository.findByNumcarteira(usuario.getCodigoSolus().replaceAll("\\.|-", ""));
+				}						
+				if (beneficiario.isPresent()) {
+					BeneficiarioSolus b = beneficiario.get();
+					// cadastra em Usuário App Mob Solis - 1o acesso Prod
+					System.out.println("Deve cadastrar em App Mob solus");
+					UsuarioSolusAppMob u = new UsuarioSolusAppMob();
+					u.setCodigoSolus(b.getCodigoBeneficiario());
+					u.setIdSolus(b.getChaveBeneficiario());
+					u.setEmail(b.getEmailTitular());
+					u.setDataNascimento(b.getDataNascimento());
+					u.setTipoUsuario(TipoUsuario.valueOf(b.getTipoBeneficiario().toUpperCase()));
+					u.setChaveFamiliarSolus(b.getChaveFamilia());
+					u.setSenhaPadrao(false);
+					
+					if(dtf.format(usuario.getDataNascimento()).equals(dtf.format(b.getDataNascimento()))){	
+						String cod = "";
+						Random random = new Random();
+						for (int i = 0; i < 5; i++) {
+							cod += random.nextInt(9) + "";
+						}
+						u.setCodRecuperacao(cod);
+
+						try{
+							emailHelper.enviaEsqueciMinhaSenhaEmail(u);
+						} catch(Exception e){
+							return new ResponseEntity<>(new Response(null, e.getMessage()), HttpStatus.FORBIDDEN);
+						}		
+						
+						repository.save(u);						
+						return new ResponseEntity<>(new Response(u, "Dados válidos"), HttpStatus.OK);
+					}else{
+						return new ResponseEntity<>(new Response(null, "Data de nascimento é inválida"),
+						HttpStatus.FORBIDDEN);
+					}
+
+				} else {
+					return new ResponseEntity<>(new Response(null, "Número da carteira ou CPF inválido"),
+							HttpStatus.FORBIDDEN);
+				}
+			} else {
+				if(dtf.format(usuario.getDataNascimento()).equals(dtf.format(user.get().getDataNascimento()))){
+					String cod = "";
+					Random random = new Random();
+					for (int i = 0; i < 5; i++) {
+						cod += random.nextInt(9) + "";
+					}
+					user.get().setCodRecuperacao(cod);
+					
+					Optional<BeneficiarioSolus> opt;
+						if(usuario.getCodigoSolus().replaceAll("\\.|-", "").length() > 6){
+							opt = beneficiarioSolusRepository.findByCpfDependente(usuario.getCodigoSolus().replaceAll("\\.|-", ""));
+						} else{
+							opt = beneficiarioSolusRepository.findByNumcarteira(usuario.getCodigoSolus().replaceAll("\\.|-", ""));
+						}
+					if(opt.isPresent()){
+						BeneficiarioSolus b = opt.get();
+						if(b.getEmailUsuario() != null){
+							user.get().setEmail(b.getEmailUsuario());
+						}
+					}
+
+					try{
+						emailHelper.enviaEsqueciMinhaSenhaEmail(user.get());
+					} catch(Exception e){
+						return new ResponseEntity<>(new Response(null, e.getMessage()), HttpStatus.FORBIDDEN);
+					}		
+					
+					repository.save(user.get());					
+					return new ResponseEntity<>(new Response(user, "Dados válidos"), HttpStatus.OK);	
+				}
+
+				return new ResponseEntity<>(new Response(null, "Data de nascimento é inválida"),
+				HttpStatus.FORBIDDEN);
+			}
+		} catch (ApiException e) {
+			return new ResponseEntity<>(new Response(null, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		} catch (Exception e) {
+			return new ResponseEntity<>(new Response(null, e.getMessage()), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+
+	}
+
+	@PostMapping("/validarCodigo")
+	public ResponseEntity<Response> validarCodigo(@RequestBody UsuarioSolusAppMob usuario) {
+
+		Optional<UsuarioSolusAppMob> u = repository.findById(usuario.getId());
+		if (u.isPresent()) {
+			if (u.get().getCodRecuperacao() != null && u.get().getCodRecuperacao().equals(usuario.getCodRecuperacao())) {
+				u.get().setCodRecuperacao(null);
+				repository.save(u.get());
+				return new ResponseEntity<>(new Response(u.get(), "Código verificado com sucesso"), HttpStatus.OK);
+			} else {
+				return new ResponseEntity<>(new Response(null, "Código inválido"), HttpStatus.FORBIDDEN);
+			}
+		} else {
+			return new ResponseEntity<>(new Response(null, "Usuário não encontrado"), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	@PostMapping("/trocarSenha")
+	public ResponseEntity<Response> trocarSenha(@RequestBody UsuarioSolusAppMob usuario) {
+		Optional<UsuarioSolusAppMob> u = repository.findById(usuario.getId());
+		if (u.isPresent()) {
+			solusBDRepository.trocarSenha(usuario.getSenha(), usuario.getCodigoSolus());
+			return new ResponseEntity<>(new Response(null, "Senha alterada com sucesso"), HttpStatus.OK);
+		} else {
+			return new ResponseEntity<>(new Response(null, "Usuário não encontrado"), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	public String gerarSenha(String senha) {
+		return encoder.encode(senha);
+	}
+
+	private void validateUserTrocaSenha(UsuarioSolusAppMob usuario) {
+		if (usuario.getCodigoSolus() == null || usuario.getDataNascimento() == null) {
+			throw new ApiException("Informe todos os dados");
+		}
+	}
+}

@@ -1,0 +1,77 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.solus.domain.AbstractEntity;
+import br.com.mkapi.solus.domain.DmedAnoDesativado;
+import br.com.mkapi.solus.domain.DmedPagamentos;
+import br.com.mkapi.solus.repository.DmedAnoDesativadoRepository;
+import br.com.mkapi.solus.repository.DmedPagamentosSolusRepository;
+
+/*
+ * Controle dos demonstrativos em demonstrativos IR e quitação de débitos.
+ */
+
+@Controller
+@RequestMapping("/api/solus/dmedPagamentos")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class DmedPagamentosSolusController extends AbstractController<AbstractEntity> {
+
+	@Autowired
+	private DmedPagamentosSolusRepository dmedPagamentosSolusRepository;
+
+    @Autowired
+    private DmedAnoDesativadoRepository dmedAnoDesativadoRepository;	
+
+	@GetMapping("/{idTitular}/getAnoByTitular")
+	public ResponseEntity<List<Long>> getAnoByTitular(@PathVariable("idTitular") Long idTitular) {
+		List<Long> anos = this.dmedPagamentosSolusRepository.findAnoByTitular(idTitular);
+		List<DmedAnoDesativado> dmedAnosDesativados = dmedAnoDesativadoRepository.findAll();
+		List<Long> anosDesativados = dmedAnosDesativados.stream().map(dad -> dad.getAno()).collect(Collectors.toList());
+		//Remove anos desativados da listagem.
+		anos.removeIf(e -> (anosDesativados.contains(e)));
+		return new ResponseEntity<>(anos, HttpStatus.OK);
+	}
+
+	@GetMapping("/{idTitular}/{ano}/getAllPagamentosByAno")
+	public ResponseEntity<List<DmedPagamentos>> getAllPagamentosByAno(@PathVariable("idTitular") Long idTitular,
+			@PathVariable("ano") Long ano) {
+
+		List<DmedPagamentos> dmedPagamentos = dmedPagamentosSolusRepository.findAllByTitularCompetencia(idTitular, ano);
+		return new ResponseEntity<>(dmedPagamentos, HttpStatus.OK);
+	}
+
+	@GetMapping("/{idTitular}/{ano}/getDmedPagamentosByAno")
+	public ResponseEntity<List<Map<String, Object>>> getDmedPagamentosByAnoETitular(
+			@PathVariable("idTitular") Long idTitular, @PathVariable("ano") Long ano) {
+
+		List<Map<String, Object>> dmedPagamentos = dmedPagamentosSolusRepository.findDmedByTitularCompetencia(idTitular,
+				ano);
+		
+		return new ResponseEntity<>(dmedPagamentos, HttpStatus.OK);
+	}
+
+	@Autowired
+	public void setDmedPagamentosSolusRepository(DmedPagamentosSolusRepository dmedPagamentosSolusRepository) {
+		this.dmedPagamentosSolusRepository = dmedPagamentosSolusRepository;
+	}
+
+	@Override
+	protected JpaRepository<AbstractEntity, UUID> getRepository() {
+		return null;
+	}
+
+}

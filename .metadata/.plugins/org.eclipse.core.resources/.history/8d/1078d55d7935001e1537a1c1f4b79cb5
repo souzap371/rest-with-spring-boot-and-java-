@@ -1,0 +1,17 @@
+package br.ufrn.imd.solicitacaurn.mkdata.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.mkdata.domain.Consultorio;
+
+public interface ConsultorioRepositoryMkdata  extends JpaRepository<Consultorio, Long>{
+	
+	@Query(value = "SELECT c.* FROM CONSULTORIOS c INNER JOIN MEDICOSXCONSULTORIOS m ON c.ID = m.CONSULTORIO_ID \n"
+			+ "	WHERE c.ATIVO  = 'S' AND  m.MEDICO_ID = ?1 ORDER BY c.NOME  ASC", nativeQuery = true)
+	public List<Consultorio> getConsultoriosByMedico(long idMedico);
+	
+
+}

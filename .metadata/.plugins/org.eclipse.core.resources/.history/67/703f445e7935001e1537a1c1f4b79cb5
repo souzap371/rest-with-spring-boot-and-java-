@@ -1,0 +1,10 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.solus.domain.ProfissionalDesabilitado;
+
+@Repository
+public interface ProfissionalDesabilitadoRepository extends JpaRepository<ProfissionalDesabilitado, Long>{
+}

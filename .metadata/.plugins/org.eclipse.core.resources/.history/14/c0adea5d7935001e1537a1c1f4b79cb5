@@ -1,0 +1,41 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.solus.domain.MunicipioSolus;
+import br.com.mkapi.solus.repository.MunicipioSolusRepository;
+
+@Controller
+@RequestMapping("/api/solus/municipio")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class MunicipioSolusController {
+
+	@Autowired
+	private MunicipioSolusRepository repository;
+
+	@GetMapping("/{uf}/{nome}")
+	public ResponseEntity<List<MunicipioSolus>> getAllByUfAndNome(@PathVariable("uf") String uf,
+			@PathVariable("nome") String nome) {
+		List<MunicipioSolus> enderecos = repository.findByUfAndNome(uf, nome);
+		if (enderecos.isEmpty())
+			return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+		else {
+			return new ResponseEntity<>(enderecos, HttpStatus.OK);
+		}
+	}
+
+	@GetMapping("/{uf}/getByUF")
+	public ResponseEntity<List<MunicipioSolus>> getAllByUf(@PathVariable("uf") String uf) {
+		List<MunicipioSolus> enderecos = repository.findByUf(uf);
+		return new ResponseEntity<>(enderecos, HttpStatus.OK);
+	}
+}

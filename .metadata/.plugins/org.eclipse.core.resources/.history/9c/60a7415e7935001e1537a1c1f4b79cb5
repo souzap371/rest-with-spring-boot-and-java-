@@ -1,0 +1,22 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.solus.domain.NotificacaoSolus;
+
+@Repository
+public interface NotificacaoSolusRepository extends JpaRepository<NotificacaoSolus, Long>{
+
+	@Query(value="select * from NOTIFICACAO_SOLUS where ativo=1 and id_usuario=?1 order by data_criacao desc",nativeQuery = true)
+	public List<NotificacaoSolus> getAllByIdUsuario(Long idUsuario);
+	
+	@Query(value="select count(*) from NOTIFICACAO_SOLUS where visualizou = 0 and ativo=1 and id_usuario=?1 ", nativeQuery = true)
+	public int countNaoVisualizadasByIdUsuario(Long idUsuario);
+
+	@Query(value="select * from NOTIFICACAO_SOLUS where visualizou = 0 and ativo=1 and id_usuario=?1 order by data_criacao desc ", nativeQuery = true)
+	public List<NotificacaoSolus> getNaoVisualizadasByIdUsuario(Long idUsuario);
+}

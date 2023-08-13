@@ -1,0 +1,15 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.FaturaDetalhada;
+
+public interface FaturaDetalhadaSolusRepository extends JpaRepository<FaturaDetalhada, Long> {
+	
+	@Query(value="SELECT * FROM VW_FATURA_DETALHADA vfd  WHERE vfd.CHAVE_MENSALIDADE = ?1", nativeQuery = true)
+	public List<FaturaDetalhada> getByBoleto(Long chaveBoleto);
+
+}

@@ -1,0 +1,82 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.solus.domain.Avaliacao;
+import br.com.mkapi.solus.repository.AvaliacaoRepository;
+
+@Controller
+@RequestMapping("/api/solus/avaliacao")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class AvaliacaoController {
+	@Autowired
+	private AvaliacaoRepository repository;
+
+	@GetMapping
+	public ResponseEntity<List<Avaliacao>> getAll() {
+		List<Avaliacao> faqs = repository.findAll();
+
+		return new ResponseEntity<>(faqs, HttpStatus.OK);
+	}
+
+	@PostMapping
+	public ResponseEntity<Object> post(@RequestBody Avaliacao avaliacao) {
+		if (avaliacao != null) {
+			Avaliacao av = repository.getAvaliacaoByIdUsuario(avaliacao.getIdUsuario());
+			if (av == null) {
+				avaliacao = repository.save(avaliacao);
+				return new ResponseEntity<>(avaliacao, HttpStatus.OK);
+			} else {
+				return new ResponseEntity<>("Este usuário já cadastrou uma avaliação.", HttpStatus.FORBIDDEN);
+			}
+		} else
+			return new ResponseEntity<>("É necessário informar os dados da avaliação.", HttpStatus.FORBIDDEN);
+	}
+
+	@PostMapping("/{id}")
+	public ResponseEntity<Object> update(@RequestBody Avaliacao avaliacao, @PathVariable(value = "id") Long id) {
+		Optional<Avaliacao> opt = repository.findById(id);
+		if (opt.isPresent()) {
+			Avaliacao a = opt.get();
+
+			a.setAvaliacao(avaliacao.getAvaliacao());
+			a.setAvaliacaoRealizada(avaliacao.getAvaliacaoRealizada());
+			a.setComentario(avaliacao.getComentario());
+			a.setProcedimento(avaliacao.getProcedimento());
+
+			a = repository.save(a);
+			return new ResponseEntity<>(a, HttpStatus.OK);
+		} else
+			return new ResponseEntity<>("Avaliação não encontrada.", HttpStatus.FORBIDDEN);
+	}
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<Avaliacao> post(@PathVariable(value = "id") Long id) {
+		Optional<Avaliacao> opt = repository.findById(id);
+		if (!opt.isPresent())
+			return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+		else {
+			repository.deleteById(id);
+			return new ResponseEntity<>(HttpStatus.OK);
+		}
+	}
+
+	@GetMapping("/{id}")
+	public ResponseEntity<Avaliacao> getAvaliacaoByIdUsuario(@PathVariable(value = "id") Long id) {
+		Avaliacao avaliacao = repository.getAvaliacaoByIdUsuario(id);
+		return new ResponseEntity<>(avaliacao, HttpStatus.OK);
+	}
+}

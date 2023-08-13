@@ -1,0 +1,298 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.io.ByteArrayOutputStream;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
+import org.xhtmlrenderer.layout.SharedContext;
+import org.xhtmlrenderer.pdf.ITextRenderer;
+
+import com.lowagie.text.Document;
+import com.lowagie.text.pdf.PdfCopy;
+import com.lowagie.text.pdf.PdfImportedPage;
+import com.lowagie.text.pdf.PdfReader;
+
+import br.com.mkapi.solus.domain.BeneficiarioSolus;
+import br.com.mkapi.solus.domain.GuiaAutorizadaPDF;
+import br.com.mkapi.solus.domain.ProcedimentoGuiaPDF;
+import br.com.mkapi.solus.repository.BeneficiarioSolusRepository;
+import br.com.mkapi.solus.repository.GuiaAutorizadaPDFRepository;
+import br.com.mkapi.solus.repository.ProcedimentoGuiaPDFRepository;
+
+@Controller
+@RequestMapping("/api/solus/guiasAutorizadas")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class GuiasAutorizadasController {
+	@Autowired
+	private GuiaAutorizadaPDFRepository guiaAutorizadaPDFRepository;
+
+	@Autowired
+	private ProcedimentoGuiaPDFRepository procedimentoGuiaPDFRepository;
+
+	@Autowired
+	private BeneficiarioSolusRepository beneficiarioRepository;	
+
+
+	@GetMapping("/view/getEmissaoGuiaLiberadaByChaveBeneficiario/{chaveBeneficiario}/{offset}")
+	public ResponseEntity<Object> getEmissaoGuiaLiberadaByChaveBeneficiario(@PathVariable("chaveBeneficiario") Long chaveBeneficiario, @PathVariable("offset") Integer offset){
+		try{
+			Optional<BeneficiarioSolus> opt = beneficiarioRepository.findById(chaveBeneficiario);
+
+			if(opt.isPresent()){
+				BeneficiarioSolus b = opt.get();
+				//Se o usuário for titular, as guias autorizadas de sua chave familiar são exibidas (aplicando as regras entre titulares e dependentes).
+				if(b.getTipoBeneficiario().toUpperCase().equals("TITULAR")){
+					List<GuiaAutorizadaPDF> guias = guiaAutorizadaPDFRepository.getEmissaoGuiaFamiliaLiberadaByBeneficiario(b.getCodigoBeneficiario(), b.getCpfTitular(), offset);
+					return new ResponseEntity<>(guias, HttpStatus.OK);
+				} else{
+					List<GuiaAutorizadaPDF> guias = guiaAutorizadaPDFRepository.getEmissaoGuiaLiberadaByBeneficiario(b.getCodigoBeneficiario(), offset);
+					return new ResponseEntity<>(guias, HttpStatus.OK);
+				}
+			}
+					
+			return new ResponseEntity<>("Beneficiário não encontrado.", HttpStatus.FORBIDDEN);
+		} catch (Exception e){
+			System.out.println(e);
+			return new ResponseEntity<>("Erro na recuperação das guias.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/* 
+	 * Endpoint que retorna um JSON com informações resumidas da guia, que será 
+	 * consumido pela API do sistema "whatsapp" da caurn, apresentando no whatsapp
+	 * as infos da guia que o usuário passou o numero.
+	 * Este endpoint também retorna a Guia Autorizada para geração do PDF no APP.
+	*/
+	@GetMapping("/view/getGuiaAutorizada/{numCarteira}/{numGuia}")
+	public ResponseEntity<Object> getGuiaAutorizada(@PathVariable("numCarteira") String numCarteira, @PathVariable("numGuia") Long numGuia){
+		try{
+			Optional<BeneficiarioSolus> opt = beneficiarioRepository.findByNumcarteira(numCarteira);
+					
+			if(opt.isPresent()){
+				BeneficiarioSolus beneficiario = opt.get();
+				Optional<GuiaAutorizadaPDF> optGuia = guiaAutorizadaPDFRepository.findById(numGuia);
+
+				if(optGuia.isPresent()){
+					GuiaAutorizadaPDF guia = optGuia.get();
+					
+					if(guia.getNCarteira().equals(beneficiario.getCodigoBeneficiario())){
+						guia.setTipoBeneficiario(beneficiario.getTipoBeneficiario());
+
+						List<ProcedimentoGuiaPDF> procedimentos = procedimentoGuiaPDFRepository.getProcedimentosPDFByNumGuia(numGuia);
+						guia.setProcedimentos(procedimentos);
+
+						return new ResponseEntity<>(guia, HttpStatus.OK);
+					} else{
+						return new ResponseEntity<>("A guia " + numGuia + " não pertence ao beneficiário " + beneficiario.getNomeBeneficiario() + ".", HttpStatus.FORBIDDEN);
+					}
+				} else{
+					return new ResponseEntity<>("Guia não encontrada.", HttpStatus.FORBIDDEN);
+				}
+
+			} else{
+				return new ResponseEntity<>("Beneficiário não encontrado.", HttpStatus.FORBIDDEN);
+			}
+		} catch (Exception e){
+			System.out.println(e);
+			return new ResponseEntity<>("Erro na recuperação da guia.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}	
+
+	@GetMapping("/downloadGuiaAutorizada/{numCarteira}/{numGuia}")
+	public ResponseEntity<?> downloadGuiaAutorizada(@PathVariable("numCarteira") String numCarteira, @PathVariable("numGuia") Long numGuia) throws Exception {
+		try{
+			Optional<BeneficiarioSolus> opt = beneficiarioRepository.findByNumcarteira(numCarteira);
+		
+			if(opt.isPresent()){
+				BeneficiarioSolus beneficiario = opt.get();
+				Optional<GuiaAutorizadaPDF> optGuia = guiaAutorizadaPDFRepository.findById(numGuia);
+				if(optGuia.isPresent()){
+					GuiaAutorizadaPDF guia = optGuia.get();
+
+					if(guia.getNCarteira().equals(beneficiario.getCodigoBeneficiario())){			
+						guia.setTipoBeneficiario(beneficiario.getTipoBeneficiario());
+
+						List<ProcedimentoGuiaPDF> procedimentos = procedimentoGuiaPDFRepository.getProcedimentosPDFByNumGuia(numGuia);
+						guia.setProcedimentos(procedimentos);
+
+						byte[] pdf = gerarPDF(guia);
+						
+						HttpHeaders headers = new HttpHeaders();
+						headers.setContentType(MediaType.APPLICATION_PDF);
+
+						String uuid = guia.getNCarteira().toString() + "_" + guia.getNGuiaPrincipal().toString();
+						headers.setContentDispositionFormData("filename", "guia_" + uuid + ".pdf");
+						headers.setCacheControl("must-revalidate, post-check=0, pre-check=0");
+
+						return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+					} else{
+						return new ResponseEntity<>("A guia " + numGuia + " não pertence ao beneficiário " + beneficiario.getNomeBeneficiario() + ".", HttpStatus.FORBIDDEN);
+					}
+				} else{
+					return new ResponseEntity<>("Guia não encontrada.", HttpStatus.FORBIDDEN);
+				}
+	
+			} else{
+				return new ResponseEntity<>("Beneficiário não encontrado.", HttpStatus.FORBIDDEN);
+			}
+		} catch (Exception e){
+			System.out.println(e);
+			return new ResponseEntity<>("Erro na recuperação da guia.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	private byte[] gerarPDF(GuiaAutorizadaPDF guia) throws Exception{
+        //gera array de guias separadas pelo numero de procedimentos (maximo de 5 por guia)
+        ArrayList<ArrayList<ProcedimentoGuiaPDF>> procedimentos = new ArrayList<>();
+
+        if(guia.getProcedimentos().size() > 0){
+			//separa os procedimentos da guia (guia.getProcedimentos()) em grupos de 5
+			for (int i = 0; i < guia.getProcedimentos().size(); i += 5) {
+				ArrayList<ProcedimentoGuiaPDF> grupoProcedimentos = new ArrayList<>();
+				for (int j = i; j < i + 5; j++) {
+					if (j < guia.getProcedimentos().size()) {
+						grupoProcedimentos.add(guia.getProcedimentos().get(j));
+					}
+				}
+				procedimentos.add(grupoProcedimentos);
+			}
+
+			List<byte[]> pdfs = new ArrayList<>();
+			for (int i = 0; i < procedimentos.size(); i++) {
+				pdfs.add(gerarPagina(guia, procedimentos.get(i), i));
+			}
+
+			return concatenatePDFs(pdfs);
+		}else{
+			//Página única se não houver procedimentos
+			return gerarPagina(guia, new ArrayList<>(), 0);
+		}
+    }
+
+    private byte[] gerarPagina(GuiaAutorizadaPDF guia, ArrayList<ProcedimentoGuiaPDF> procedimentos, int index) throws Exception {
+        ClassLoaderTemplateResolver templateResolver = new ClassLoaderTemplateResolver();
+        templateResolver.setSuffix(".html");
+        templateResolver.setTemplateMode(TemplateMode.HTML);
+    
+        TemplateEngine templateEngine = new TemplateEngine();
+        templateEngine.setTemplateResolver(templateResolver);
+
+        Context context = new Context();
+        context = setValues(context, guia, procedimentos, index);
+        
+        String html = templateEngine.process("template", context);
+    
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ITextRenderer renderer = new ITextRenderer();
+
+            SharedContext sharedContext = renderer.getSharedContext();
+            sharedContext.setPrint(true);
+            sharedContext.setInteractive(false);
+            
+            renderer.setDocumentFromString(html);
+
+            renderer.layout();
+            renderer.createPDF(baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            throw new Exception("Erro ao gerar PDF: " + e.getMessage());
+        }
+
+    }
+    
+    private byte[] concatenatePDFs(List<byte[]> pdfs) throws Exception {
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        Document document = new Document();
+        PdfCopy copy = new PdfCopy(document, result);
+        document.open();
+        for (byte[] pdf : pdfs) {
+            PdfReader reader = new PdfReader(pdf);
+            int n = reader.getNumberOfPages();
+            for (int i = 0; i < n; i++) {
+                document.newPage();
+                PdfImportedPage page = copy.getImportedPage(reader, i + 1);
+                copy.addPage(page);
+            }
+        }
+        document.close();
+        return result.toByteArray();
+    }
+
+    Context setValues(Context context, GuiaAutorizadaPDF guia, List<ProcedimentoGuiaPDF> procedimentos, int index){
+        context.setVariable("numguiaprestador", guia.getNGuiaPrestador());
+        context.setVariable("paginacao", index+1 + "/" + ((guia.getProcedimentos().size()/5)+1));
+        context.setVariable("registroans", guia.getRegistroANS());
+        context.setVariable("numguiaprincipal", guia.getNGuiaPrincipal());
+        context.setVariable("dataautorizacao", guia.getDataAutorizacao());
+        context.setVariable("senha", guia.getSenha());
+        context.setVariable("validadesenha", guia.getDataValidadeSenha());
+        context.setVariable("numeroguiaoperadora", guia.getNGuiaOperadora());
+        context.setVariable("numcarteira", guia.getNCarteira() + " - " + guia.getTipoBeneficiario());
+        //context.setVariable("validadecarteira", guia.getDataValidadeCarteira());
+        context.setVariable("nomecompleto", guia.getNomeCompleto());
+        context.setVariable("numcartaosus", guia.getNCartaoNacionalSaude());
+        context.setVariable("atendimentorn", guia.getAtendimentoRN());
+        context.setVariable("codoperadora", guia.getCodigoSolicitanteOperadora());
+        context.setVariable("nomecontratado", guia.getNomeExecutanteContratado());
+        context.setVariable("nomeprofissional", guia.getNomeProfissionalSolicitante());
+        context.setVariable("conselhoprofissional", guia.getConselhoProfissional());
+        context.setVariable("numeroconselho", guia.getNumeroConselho());
+        context.setVariable("uf", guia.getUf());
+        context.setVariable("codigocbo", guia.getCodigoCBOS());
+        context.setVariable("carateratendimento", guia.getCaraterAtendimento());
+        context.setVariable("datasolicitacao", guia.getDataSolicitacao());
+        context.setVariable("indiciacaoclinica", guia.getIndicacaoClinica());
+        context.setVariable("codoperadora", guia.getCodigoExecutanteOperadora());
+        context.setVariable("nomecontratado", guia.getNomeExecutanteContratado());
+        context.setVariable("codigocnes", guia.getCodigoCNES());
+		context.setVariable("nomesocial", guia.getNomeSocial());
+		context.setVariable("regimeatendimento", guia.getRegimeAtendimento());
+
+        for(int i = 0; i < 5; i++){
+            int cont = i+1;
+            if(i < procedimentos.size()){
+                context.setVariable("tabela" + cont, procedimentos.get(i).getTabela());
+                context.setVariable("codprocedimento" + cont, procedimentos.get(i).getCodigoProcedimento());
+                context.setVariable("descricaoprocedimento" + cont, procedimentos.get(i).getDescricao());
+                context.setVariable("qtdsolicitada" + cont, procedimentos.get(i).getQtdeSolict());
+                context.setVariable("qtdautorizada" + cont, procedimentos.get(i).getQtdeAut());    
+            }else{
+                context.setVariable("tabela" + cont, "|__|__|");
+                context.setVariable("codprocedimento" + cont, "|__|__|__|__|__|__|__|__|__|");
+                context.setVariable("descricaoprocedimento" + cont, "____________________________________________________________________________________________________");
+                context.setVariable("qtdsolicitada" + cont, "|__|__|__|");
+                context.setVariable("qtdautorizada" + cont, "|__|__|__|__|__|__|__|__|");
+            }
+        }
+
+        context.setVariable("tipoatendimento", guia.getTipoAtendimento());
+        context.setVariable("indicacaoacidente", guia.getIndicacaoAcidente());
+        context.setVariable("tipoconsulta", guia.getTipoConsulta());
+        
+        Date dataHoraAtual = new Date();
+        String data = new SimpleDateFormat("dd/MM/yyyy").format(dataHoraAtual);
+        String hora = new SimpleDateFormat("HH:mm:ss").format(dataHoraAtual);
+        context.setVariable("datahora", data + " " + hora);
+
+        return context;
+    }
+
+}

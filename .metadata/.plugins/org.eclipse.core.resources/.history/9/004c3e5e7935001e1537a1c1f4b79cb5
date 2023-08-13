@@ -1,0 +1,164 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Objects;
+
+import javax.persistence.EntityManager;
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.service.ArquivoService;
+import br.com.mkapi.solus.domain.AnexoPedido;
+import br.com.mkapi.solus.domain.PedidoFilter;
+import br.com.mkapi.solus.domain.PedidoView;
+import br.com.mkapi.solus.domain.UsuarioSolusAppMob;
+import br.com.mkapi.solus.domain.enums.TipoUsuario;
+
+@Repository
+public class PedidoViewCustomRepositoryImpl implements PedidoViewCustomRepository {
+	@Autowired
+	@Qualifier("mainEntityManagerFactory")
+	private EntityManager entityManager;
+	
+	@Autowired
+	@Qualifier("solus")
+	private DataSource dt;
+
+	@Autowired
+	private AnexoPedidoRepository anexoPedidoRepository;
+	
+	@Autowired
+	private PrestadorAtendimentoRepository atendimentoRepository;
+	
+	@Autowired
+	private ArquivoService arquivoService;
+	
+	@Override
+	public List<PedidoView> filteredPedidoViewByUsuario(UsuarioSolusAppMob usuario, PedidoFilter filter, Integer offset) {
+		StringBuilder queryBuilder = new StringBuilder();
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+		
+		queryBuilder.append("SELECT * FROM ( "
+				+ " SELECT row_number() OVER (ORDER BY vpe.DT_PEDIDO DESC) linha, vpe.* FROM VW_PEDIDO_EXAME vpe ");
+				
+		if(usuario.getTipoUsuario().equals(TipoUsuario.TITULAR)) {
+			queryBuilder.append("INNER JOIN VW_BENEFICIARIO vb ON vpe.CODIGO_BENEFICIARIO = vb.CODIGO_BENEFICIARIO " +
+									"where ((vpe.CHAVE_BENEFICIARIO = :beneficiario) ");
+
+			if(usuario.getBeneficiario() != null && usuario.getBeneficiario().getCpfTitular() != null ){
+				/* 
+				* Aplicação das regras entre titulares e dependentes:
+				* Um titular pode visualizar os pedidos de exame de
+				* seus dependentes e agregados menores de 18 anos.
+				*/				
+				queryBuilder.append("OR (vb.CPF_TITULAR = :cpfTitular " +
+									"AND (SELECT DISTINCT months_between(TRUNC(sysdate), vb.DATA_NASC_BENEFICIARIO)/12 as age from dual) < 18) " +
+									"AND (UPPER(vb.TIPO_BENEFICIARIO) = 'DEPENDENTE' OR UPPER(vb.TIPO_BENEFICIARIO) = 'AGREGADO'))"
+				);
+				parameters.addValue("cpfTitular", usuario.getBeneficiario().getCpfTitular());
+			}else{
+				queryBuilder.append(")");
+			}
+
+			parameters.addValue("beneficiario", usuario.getIdSolus());
+		} else {
+			queryBuilder.append(" WHERE vpe.CHAVE_BENEFICIARIO = :beneficiario ");
+			parameters.addValue("beneficiario", usuario.getIdSolus());
+		}
+		
+		if(!Objects.isNull(filter.getNomeBeneficiario())) {
+			queryBuilder.append(" AND vpe.BENEFICIARIO = :beneficiarioNome ");
+			parameters.addValue("beneficiarioNome", filter.getNomeBeneficiario());
+		}
+		
+		if(!Objects.isNull(filter.getDataSolicitacao())) {
+			queryBuilder.append(" AND TRUNC(vpe.DT_PEDIDO) = TRUNC(:dataPedido) ");
+			parameters.addValue("dataPedido", filter.getDataSolicitacao());
+		}
+		
+		queryBuilder.append(" ) WHERE linha BETWEEN :offset AND (:offset + 10) ");
+		parameters.addValue("offset", offset);
+		
+		List<PedidoView> pedidos = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(), parameters, new RowMapper<PedidoView>() {
+			
+			@Override
+			public PedidoView mapRow(ResultSet rs, int rowNum) throws SQLException {
+				PedidoView pv = new PedidoView();
+				
+				pv.setId(rs.getLong("id_pedido"));
+				pv.setChaveBeneficiario(rs.getLong("chave_beneficiario"));
+				pv.setCodigoBeneficiario(rs.getString("codigo_beneficiario"));
+				pv.setBeneficiario(rs.getString("beneficiario"));
+				pv.setDtPedido(rs.getDate("dt_pedido"));
+				pv.setNomeSolicitante(rs.getString("nome_solicitante"));
+				pv.setTipoSolicitante(rs.getString("tipo_solicitante"));
+				pv.setNumConselho(rs.getLong("num_conselho"));
+				pv.setLocal(rs.getString("indicacao_clinica"));
+				pv.setStatus(rs.getString("status"));
+				pv.setObservacao(rs.getString("observacao"));
+				if(rs.getLong("NLOCAPRES") !=0) {
+					pv.setLocalAtendimento(atendimentoRepository.findById(rs.getLong("NLOCAPRES")).get());
+				}
+				return pv;
+			}
+		});
+
+		return pedidos;
+	}
+
+	@Override
+	public PedidoView getById(Long id) {
+		String query = "SELECT vpe.* FROM VW_PEDIDO_EXAME vpe WHERE vpe.ID_PEDIDO = :id";
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+		
+		parameters.addValue("id", id);
+		
+		PedidoView pedido = new NamedParameterJdbcTemplate(dt).queryForObject(query, parameters, new RowMapper<PedidoView>() {
+			
+			@Override
+			public PedidoView mapRow(ResultSet rs, int rowNum) throws SQLException {
+				PedidoView pv = new PedidoView();
+				
+				pv.setId(rs.getLong("id_pedido"));
+				pv.setChaveBeneficiario(rs.getLong("chave_beneficiario"));
+				pv.setCodigoBeneficiario(rs.getString("codigo_beneficiario"));
+				pv.setBeneficiario(rs.getString("beneficiario"));
+				pv.setDtPedido(rs.getDate("dt_pedido"));
+				pv.setNomeSolicitante(rs.getString("nome_solicitante"));
+				pv.setTipoSolicitante(rs.getString("tipo_solicitante"));
+				pv.setNumConselho(rs.getLong("num_conselho"));
+				pv.setLocal(rs.getString("indicacao_clinica"));
+				if(rs.getLong("NLOCAPRES") !=0)  
+					pv.setLocalAtendimento(atendimentoRepository.findById(rs.getLong("NLOCAPRES")).get());
+				pv.setObservacao(rs.getString("observacao"));
+				pv.setStatus(rs.getString("status"));
+				
+				return pv;
+			}
+		});
+		
+		if(!Objects.isNull(pedido)) {
+			List<AnexoPedido> anexos = anexoPedidoRepository.getByIdPedido(id);
+			
+			for(AnexoPedido ap : anexos) {
+				ap.setBase64(arquivoService.recuperarAnexo(ap.getNomeAnexo()));
+				ap.setFormato(arquivoService.gerarExtensao(ap.getNomeAnexo()));
+			}
+			
+			
+			pedido.setAnexos(anexos);
+		}
+		
+		return pedido;
+	}
+	
+	
+}

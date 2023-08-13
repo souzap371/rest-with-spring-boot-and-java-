@@ -1,0 +1,29 @@
+package br.ufrn.imd.solicitacaurn.cassi.repository;
+
+import java.util.List;
+
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.cassi.domain.EspecialidadeCassi;
+import br.com.mkapi.cassi.domain.RedeCredenciada;
+import br.com.mkapi.cassi.domain.RedeCredenciadaFavoritos;
+import br.com.mkapi.cassi.domain.RedeCredenciadaFiltro;
+import br.com.mkapi.cassi.domain.TipoPrestadorSoc;
+
+@Repository
+public interface RedeCredenciadaCustomRepository {
+
+    List<RedeCredenciadaFavoritos> getFavoritosUrgenciaByUsuario(Long idUsuario, Integer offset);
+
+    List<RedeCredenciadaFavoritos> getFavoritosEletivaRNByUsuario(Long idUsuario, Integer offset);
+
+    List<RedeCredenciadaFavoritos> getFavoritosEletivaForaRNByUsuario(Long idUsuario, Integer offset);
+
+    List<RedeCredenciada> findAllByFiltro(RedeCredenciadaFiltro filtro, Integer offset);
+
+    List<RedeCredenciada> findAllByFiltroEletivo(RedeCredenciadaFiltro filtro, Integer offset);
+
+    List<EspecialidadeCassi> findEspecialidadeByNameAndFiltro(RedeCredenciadaFiltro filtro, String term);
+
+    List<TipoPrestadorSoc> findAllTipoPrestadorSocByFiltro(RedeCredenciadaFiltro filtro);
+}

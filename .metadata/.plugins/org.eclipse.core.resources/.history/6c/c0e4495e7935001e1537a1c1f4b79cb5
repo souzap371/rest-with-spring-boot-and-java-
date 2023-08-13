@@ -1,0 +1,14 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.Carencia;
+
+public interface CarenciaSolusRepository extends JpaRepository<Carencia, String> {
+
+	@Query(value = "SELECT * FROM VW_CARENCIAS vc WHERE CHAVE_BENEFICIARIO = ?1", nativeQuery = true)
+	public List<Carencia> findAllByBeneficiario(Long idSolus);
+}

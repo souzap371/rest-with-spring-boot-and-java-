@@ -1,0 +1,25 @@
+package br.ufrn.imd.solicitacaurn.solus.domain.holder;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+
+import br.com.mkapi.solus.domain.UsuarioSolusAppMob;
+import br.com.mkapi.solus.repository.UsuarioSolusAppMobRepository;
+
+@Component
+public class UsuarioAbstractHolder implements UsuarioHolder{
+
+	@Autowired
+	private UsuarioSolusAppMobRepository repository;
+	
+	@Override
+	public UsuarioSolusAppMob getUsuario() {
+		if(SecurityContextHolder.getContext().getAuthentication().getPrincipal() instanceof UsuarioSolusAppMob) {
+			return (UsuarioSolusAppMob) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+		}else{
+			UsuarioSolusAppMob u = repository.findByCpfOrNumcarteira((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).get();
+			return u;
+		}
+	}
+}

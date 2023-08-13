@@ -1,0 +1,14 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.solus.domain.Avaliacao;
+
+@Repository
+public interface AvaliacaoRepository extends JpaRepository<Avaliacao, Long>{
+
+	@Query(value="SELECT * FROM avaliacoes av WHERE av.id_usuario = ?1 ", nativeQuery = true)
+	public Avaliacao getAvaliacaoByIdUsuario(Long idUsuario);    
+}

@@ -1,0 +1,39 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.solus.domain.AbstractEntity;
+import br.com.mkapi.solus.domain.Carencia;
+import br.com.mkapi.solus.repository.CarenciaSolusRepository;
+
+@Controller
+@RequestMapping("/api/solus/carencia")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class CarenciaSolusController extends AbstractController<AbstractEntity> {
+
+	@Autowired
+	CarenciaSolusRepository repository;
+
+	@GetMapping("/{idSolus}/getAllByBeneficiario")
+	public ResponseEntity<List<Carencia>> getAllByBeneficiario(@PathVariable("idSolus") Long idSolus) {
+		List<Carencia> carencias = repository.findAllByBeneficiario(idSolus);
+		return new ResponseEntity<>(carencias, HttpStatus.OK);
+	}
+
+	@Override
+	protected JpaRepository<AbstractEntity, UUID> getRepository() {
+		return null;
+	}
+
+}

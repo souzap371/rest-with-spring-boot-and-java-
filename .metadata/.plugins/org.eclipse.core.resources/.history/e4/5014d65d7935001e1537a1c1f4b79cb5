@@ -1,0 +1,9 @@
+package br.ufrn.imd.solicitacaurn.mkdata.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import br.com.mkapi.mkdata.domain.Consulta;
+
+public interface ConsultaRepository extends JpaRepository<Consulta, Long>{
+	
+}

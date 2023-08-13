@@ -1,0 +1,34 @@
+package br.ufrn.imd.solicitacaurn.mkdata.controller;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.mkdata.domain.Empresa;
+import br.com.mkapi.mkdata.repository.EmpresaRepositoryMkdata;
+
+@Controller
+@RequestMapping("/api/mkdata/empresa")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class EmpresaControllerMkdata {
+	
+	@Autowired
+	public EmpresaRepositoryMkdata empresaRepository;
+	
+	@GetMapping("/getAll")
+	public ResponseEntity<List<Empresa>> getAll() {
+		List<Empresa> empresas = empresaRepository.getAll();
+		if(empresas.isEmpty()){
+			return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+		}else{
+			return new ResponseEntity<>(empresas, HttpStatus.OK);
+		}
+	}
+
+}

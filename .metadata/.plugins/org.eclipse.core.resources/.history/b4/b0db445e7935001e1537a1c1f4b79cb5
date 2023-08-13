@@ -1,0 +1,22 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.GuiaMedico;
+
+public interface GuiaMedicoRepository extends JpaRepository<GuiaMedico, Long>{
+	
+	@Query(value="select gm.* from vw_guia_medico gm " + 
+			"where gm.especialidade_prestador = ?1 "
+			,nativeQuery = true)
+	public List<GuiaMedico> findByEspecialidadePrestador(String especialidadePrestador);
+
+	@Query(value="select DISTINCT(gm.especialidade_prestador) from APPMOB.vw_guia_medico gm "
+			+ "order by gm.especialidade_prestador asc" 			
+			,nativeQuery = true)
+	public List<String> getEspecialidade();
+	
+}

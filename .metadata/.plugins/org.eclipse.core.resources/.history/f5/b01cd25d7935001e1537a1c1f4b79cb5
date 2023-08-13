@@ -1,0 +1,21 @@
+package br.ufrn.imd.solicitacaurn.mkdata.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.mkdata.domain.Medico;
+
+@Repository
+public interface MedicoRepositoryMkdata extends JpaRepository<Medico, Long>{
+	
+	@Query(value = "select DISTINCT medico.id, medico.NOME, medico.crm, medico.ATIVO, medico.EMPRESA_ID from medicos medico\n"
+			+ "			inner join medicoxespecs esp on MEDICO.id = esp.MEDICO_ID \n"
+			+ "			where medico.ativo = 'S'  AND esp.espec_id = ?1\n"
+			+ "			order by medico.nome ASC\n"
+			+ "			", nativeQuery = true)
+	public List<Medico> getMedicoByEspecialidade(long idEspecialidade);
+
+}

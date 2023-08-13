@@ -1,0 +1,17 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.PrestadorSolicitante;
+
+public interface PrestadorSolicitanteRepository extends JpaRepository<PrestadorSolicitante, Long>{
+
+	@Query(value = "SELECT * FROM (SELECT * FROM VW_PRES_SOLIC vps\r\n"
+			+ "WHERE UPPER(vps.NOME_SOLICITANTE) LIKE UPPER('%' || ?1 || '%')\r\n"
+			+ "OR UPPER(vps.CRM_SOLICITANTE) LIKE UPPER('%' || ?1 || '%')\r\n"
+			+ "ORDER BY case when vps.NOME_SOLICITANTE LIKE UPPER(?1 || '%') then 0 else 1 END, vps.NOME_SOLICITANTE) WHERE rownum <= 100 ", nativeQuery = true)
+	public List<PrestadorSolicitante> getPrestadorSolicitanteByNameOrCrm(String term);
+}

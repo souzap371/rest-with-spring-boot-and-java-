@@ -1,0 +1,17 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.solus.domain.FaqSolus;
+
+@Repository
+public interface FaqSolusRepository extends JpaRepository<FaqSolus, Long>{
+	
+	@Query(value="SELECT * from FAQ_SOLUS where ativo=1", 
+            nativeQuery = true)
+    List<FaqSolus> getAll();
+}

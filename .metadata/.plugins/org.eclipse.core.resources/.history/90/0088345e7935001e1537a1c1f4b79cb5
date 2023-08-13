@@ -1,0 +1,11 @@
+package br.ufrn.imd.solicitacaurn.solus.domain.holder;
+
+import org.springframework.stereotype.Component;
+
+import br.com.mkapi.solus.domain.UsuarioSolusAppMob;
+
+@Component
+public interface UsuarioHolder {
+
+	UsuarioSolusAppMob getUsuario();
+}

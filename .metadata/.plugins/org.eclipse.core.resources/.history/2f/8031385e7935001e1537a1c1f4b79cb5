@@ -1,0 +1,19 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.solus.domain.RegraAgendamento;
+
+@Repository
+public interface RegraAgendamentoRepository extends JpaRepository<RegraAgendamento, Long>{
+
+    @Query(value="SELECT * from REGRAS_AGENDAMENTO ra " + 
+    "WHERE ra.id_profissional = ?1 " +
+    "AND ra.id_especialidade = ?2"
+    ,nativeQuery = true)
+    public List<RegraAgendamento> getRegraByMedicoAndEspecialidade(Long idProfissional, Long idEspecialidade);
+}

@@ -1,0 +1,116 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.solus.domain.FaqSolus;
+import br.com.mkapi.solus.repository.FaqSolusRepository;
+
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+
+@Controller
+@RequestMapping("/api/solus/faq")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class FaqSolusController {
+
+	@Autowired
+	private FaqSolusRepository faqRepository;
+
+	@GetMapping("/getAll")
+	public ResponseEntity<List<FaqSolus>> getAll() {
+		List<FaqSolus> faqs = faqRepository.getAll();
+		return new ResponseEntity<>(faqs, HttpStatus.OK);
+	}
+
+    @PostMapping
+	public ResponseEntity<?> post(@RequestBody FaqSolus faqSolus){
+		try{
+			if(StringUtils.isEmpty(faqSolus.getQuestion())){
+				return new ResponseEntity<>("A dúvida frequente deve possuir uma pergunta.", HttpStatus.FORBIDDEN);
+			} else if(StringUtils.isEmpty(faqSolus.getAnswer())){
+				return new ResponseEntity<>("A Dúvida Frequente deve possuir uma resposta.", HttpStatus.FORBIDDEN);
+			}
+
+			faqSolus = faqRepository.save(faqSolus);
+
+			return new ResponseEntity<>(faqSolus, HttpStatus.OK);
+		}
+		catch(Exception e){
+        	return new ResponseEntity<>("Erro ao cadastrar nova Dúvida Frequente.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}	
+
+    @PostMapping("/{id}")
+	public ResponseEntity<?> update(@PathVariable(value = "id") Long id, @RequestBody FaqSolus faqSolus){
+		try{
+			if(StringUtils.isEmpty(faqSolus.getQuestion())){
+				return new ResponseEntity<>("A dúvida frequente deve possuir uma pergunta.", HttpStatus.FORBIDDEN);
+			} else if(StringUtils.isEmpty(faqSolus.getAnswer())){
+				return new ResponseEntity<>("A Dúvida Frequente deve possuir uma resposta.", HttpStatus.FORBIDDEN);
+			}
+
+			Optional<FaqSolus> opt = faqRepository.findById(id);
+		
+			if(!opt.isPresent())
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			else{
+				FaqSolus oldFaq = opt.get();
+				oldFaq.setQuestion(faqSolus.getQuestion());
+				oldFaq.setAnswer(faqSolus.getAnswer());
+				oldFaq.setAtivo(faqSolus.isAtivo());
+				oldFaq = faqRepository.save(oldFaq);
+				return new ResponseEntity<>(faqSolus, HttpStatus.OK);
+			}
+		}
+		catch(Exception e){
+        	return new ResponseEntity<>("Erro ao editar Dúvida Frequente.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+    @PostMapping("/alterarAtivoFaq/{id}")
+	public ResponseEntity<?> alterarAtivoFaq(@PathVariable(value = "id") Long id){
+		try{
+			Optional<FaqSolus> opt = faqRepository.findById(id);
+		
+			if(!opt.isPresent())
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			else{
+				FaqSolus faq = opt.get();
+				faq.setAtivo(!faq.isAtivo());
+				faq = faqRepository.save(faq);
+				return new ResponseEntity<>(faq, HttpStatus.OK);
+			}
+		}
+		catch(Exception e){
+        	return new ResponseEntity<>("Erro ao editar Dúvida Frequente.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}	
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<?> delete(@PathVariable(value = "id") Long id){
+		try{
+			Optional<FaqSolus> opt = faqRepository.findById(id);
+			
+			if(!opt.isPresent())
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			else{
+				faqRepository.deleteById(id);
+				return new ResponseEntity<>(HttpStatus.OK);	
+			}
+		} catch(Exception e){
+        	return new ResponseEntity<>("Erro ao deletar Dúvida Frequente.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	} 	
+}

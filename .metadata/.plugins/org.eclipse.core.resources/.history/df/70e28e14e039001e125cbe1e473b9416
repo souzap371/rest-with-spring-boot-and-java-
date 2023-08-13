@@ -1,0 +1,5 @@
+package br.com.pablo.config;
+
+public class OpenApiConfig {
+
+}

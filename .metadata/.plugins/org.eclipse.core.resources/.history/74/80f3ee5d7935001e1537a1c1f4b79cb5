@@ -1,0 +1,87 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.mkdata.domain.EspecialidadeMkdata;
+import br.com.mkapi.mkdata.repository.EspecialidadeRepositoryMkdata;
+import br.com.mkapi.solus.domain.EspecialidadeNotificacaoDesativada;
+import br.com.mkapi.solus.repository.EspecialidadeNotificacaoDesativadaRepository;
+
+@Controller
+@RequestMapping("/api/solus/especialidadeNotificacaoDesativada")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class EspecialidadeNotificacaoDesativadaController {
+    @Autowired
+	private EspecialidadeNotificacaoDesativadaRepository repository;
+
+    @Autowired
+    private EspecialidadeRepositoryMkdata especialidadeRepositoryMkdata;    
+
+    @GetMapping
+	public ResponseEntity<List<EspecialidadeNotificacaoDesativada>> getAll() {
+		List<EspecialidadeNotificacaoDesativada> especialidades = repository.findAll();
+		
+		return new ResponseEntity<>(especialidades, HttpStatus.OK);
+	}
+
+	@PostMapping
+	public ResponseEntity<Object> post(@RequestBody EspecialidadeNotificacaoDesativada especialidade){
+		if(especialidade.getIdEspecialidade() != null){
+            if(especialidade.getDescricao() == null){
+				//Configura automaticamente a descrição (nome) da especialidade.
+                Optional<EspecialidadeMkdata> e = especialidadeRepositoryMkdata.findById(especialidade.getIdEspecialidade());
+                if(e.isPresent()){
+                    especialidade.setDescricao(e.get().getNome());
+                }
+            }
+
+            especialidade = repository.save(especialidade);
+            return new ResponseEntity<>(especialidade, HttpStatus.OK);
+		}
+		else
+			return new ResponseEntity<>("É necessário informar o id da especialidade.", HttpStatus.FORBIDDEN);
+	}    
+
+    @PostMapping("/{id}")
+	public ResponseEntity<Object> update(@RequestBody EspecialidadeNotificacaoDesativada especialidade, @PathVariable(value = "id") Long id){
+		Optional<EspecialidadeNotificacaoDesativada> opt = repository.findById(id);
+		if(opt.isPresent()){
+            EspecialidadeNotificacaoDesativada especialidadeNotificacaoDesativada = opt.get();
+            especialidadeNotificacaoDesativada.setIdEspecialidade(especialidade.getIdEspecialidade());
+
+            Optional<EspecialidadeMkdata> e = especialidadeRepositoryMkdata.findById(especialidade.getIdEspecialidade());
+            if(e.isPresent()){
+                especialidadeNotificacaoDesativada.setDescricao(e.get().getNome());
+            }
+
+			especialidadeNotificacaoDesativada = repository.save(especialidadeNotificacaoDesativada);
+			return new ResponseEntity<>(especialidade, HttpStatus.OK);
+		}
+		else
+			return new ResponseEntity<>("Especialidade com notificação desativada não encontrada.", HttpStatus.FORBIDDEN);
+	}        
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<EspecialidadeNotificacaoDesativada> post(@PathVariable(value = "id") Long id){
+		Optional<EspecialidadeNotificacaoDesativada> opt = repository.findById(id);
+		if(!opt.isPresent())
+			return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+		else{
+			repository.deleteById(id);
+			return new ResponseEntity<>(HttpStatus.OK);	
+		}
+	}    
+}

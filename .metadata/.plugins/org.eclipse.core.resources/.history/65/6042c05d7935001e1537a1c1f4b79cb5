@@ -1,0 +1,44 @@
+package br.ufrn.imd.solicitacaurn.mkdata.controller;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.mkdata.domain.Telemedicina;
+import br.com.mkapi.mkdata.repository.TelemedicinaCustomRepository;
+import br.com.mkapi.solus.domain.BeneficiarioSolus;
+import br.com.mkapi.solus.repository.BeneficiarioSolusRepository;
+
+@Controller
+@RequestMapping("/api/mkdata/telemedicina")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class TelemedicinaController {
+
+	@Autowired
+	TelemedicinaCustomRepository telemedicinaCustomRepository;
+
+	@Autowired
+	private BeneficiarioSolusRepository beneficiarioSolusRepository;	
+
+	@GetMapping("/getAllByPaciente/{idPaciente}/{offset}")
+	public ResponseEntity<?> findAllTelemedicinaByPaciente(
+			@PathVariable("idPaciente") Long idPaciente, @PathVariable("offset") Integer offset) {
+		
+		Optional<BeneficiarioSolus> optBen = beneficiarioSolusRepository.findById(idPaciente);
+		if(optBen.isPresent()){
+			BeneficiarioSolus beneficiarioSolus = optBen.get();
+			List<Telemedicina> telemedicinaList = telemedicinaCustomRepository.findAllTelemedicinaByPaciente(beneficiarioSolus.getCodigoBeneficiario(), offset);
+			return new ResponseEntity<>(telemedicinaList, HttpStatus.OK);
+		} else{
+			return new ResponseEntity<>("Beneficiário não encontrado.", HttpStatus.FORBIDDEN);
+		}
+	}
+}

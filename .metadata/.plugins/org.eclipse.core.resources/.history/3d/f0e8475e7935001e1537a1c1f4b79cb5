@@ -1,0 +1,54 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.BeneficiarioSolus;
+
+public interface BeneficiarioSolusRepository extends JpaRepository<BeneficiarioSolus, Long>{
+	
+	
+	@Query(value="select * from vw_beneficiario u "
+			+ "where u.codigo_beneficiario = ?1  "
+			,nativeQuery = true)
+	public Optional<BeneficiarioSolus> findByNumcarteira(String numCarteira);
+	
+	
+	@Query(value="select u.* from vw_beneficiario u " + 
+			"where u.chave_familia = ?1 "
+			,nativeQuery = true)
+	public List<BeneficiarioSolus> findByChaveFamiliaToTitular(Long chaveFamilia);
+
+	@Query(value="select u.* from vw_beneficiario u " + 
+			"where u.cpf_titular = ?1 "
+			,nativeQuery = true)
+	public List<BeneficiarioSolus> findByCpfTitularToTitular(String cpfTitular);	
+	
+	@Query(value="select u.* from vw_beneficiario u " + 
+			"where u.chave_familia = ?1 and u.chave_beneficiario = ?2 "
+			,nativeQuery = true)
+	public List<BeneficiarioSolus> findByChaveFamiliaToNotTitular(Long chaveFamilia, Long chaveBeneficiario);
+	
+	@Query(value="select u.chave_beneficiario from vw_beneficiario u " + 
+			"where u.chave_familia = ?1 "
+			,nativeQuery = true)
+	public List<Long> findIdSolusByChaveFamilia(Long chaveFamilia);
+
+	@Query(value="select u.codigo_beneficiario from vw_beneficiario u " + 
+		"where u.cpf_titular = ?1 "
+		,nativeQuery = true)
+	public List<String> findCodigoBeneficiarioByCpfTitular(String cpfTitular);
+
+	@Query(value="select u.* from vw_beneficiario u " + 
+			"where u.cpf_titular = ?1 and u.tipo_beneficiario = 'Titular'"
+			,nativeQuery = true)
+	public BeneficiarioSolus findTitularByCpf(String cpf);	
+
+	@Query(value="select u.* from vw_beneficiario u " + 
+			"where u.CPF_DEPENDENTE = ?1"
+			,nativeQuery = true)
+	public Optional<BeneficiarioSolus> findByCpfDependente(String cpf);		
+}

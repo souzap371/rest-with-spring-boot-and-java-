@@ -1,0 +1,247 @@
+package br.ufrn.imd.solicitacaurn.utils;
+
+import java.text.SimpleDateFormat;
+import java.util.Objects;
+import java.util.Properties;
+
+import javax.mail.Session;
+import javax.mail.internet.MimeMessage;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.stereotype.Component;
+
+import com.google.common.base.Strings;
+
+import br.com.mkapi.exception.ApiException;
+import br.com.mkapi.mkdata.domain.Agendas;
+import br.com.mkapi.solus.domain.Pedido;
+import br.com.mkapi.solus.domain.UsuarioSolusAppMob;
+
+/* 
+ * Componente usado para construção e envio de email.
+*/
+
+@Component
+public class EmailHelper {
+	
+	@Autowired
+    public JavaMailSender emailSender;
+
+    Session mailSession = Session.getInstance( new Properties() );
+    public MimeMessage simpleMessage = new MimeMessage(mailSession);
+    
+	public void enviaEsqueciMinhaSenhaEmail(UsuarioSolusAppMob usuario) {
+
+		String email = usuario.getEmail() == null ? 
+		(usuario.getBeneficiario() == null ? null : usuario.getBeneficiario().getEmailTitular())
+		: usuario.getEmail();
+
+		if(email == null || email == ""){
+			throw new ApiException("O usuário não possui nenhum email cadastrado."); 
+		}
+
+		try {
+            MimeMessage message = emailSender.createMimeMessage();
+            message.setSubject("Código de recuperação de senha CAURN");
+            MimeMessageHelper helper;
+            helper = new MimeMessageHelper(message, true);
+
+            helper.setTo(email);
+            helper.setFrom("naoresponder@caurn.com.br", "CAURN");
+            helper.setText(getTemplateRecuperacaoSenhaEmail(usuario.getCodRecuperacao()), true);
+            emailSender.send(message);
+        } catch (Exception e) {
+        	e.printStackTrace();
+			throw new ApiException("Erro no envio do código para o email.");
+        }
+	}
+	
+	private String getTemplateRecuperacaoSenhaEmail(String codigo) {
+		String texto = "<body style=\"margin: 0; padding: 0;\">\t\n" + "\t\n"
+				+ "<table align=\"center\" width=\"600\" style=\"border-collapse: collapse;font-family:Roboto-Regular,Helvetica,Arial,sans-serif;font-size:14px \">\r\n" + 
+				"	<tr><td align=\"center\" bgcolor=\"#CC2331\" style=\"padding: 40px 0 30px 0;\">\r\n" + 
+				"		<h1 style=\"color:#ffffff;\">CAURN</h1></td>\r\n" + 
+				"				</tr><tr>\r\n" + 
+				"				<td bgcolor=\"#F0F0F0\" style=\"padding: 40px 30px 40px 30px;\">O seu código para criar uma nova senha é: <br>\r\n" + 
+				"				<div style=\"  width: 100px; height: 50px; margin-top: 10px; margin-left: auto; margin-right: auto; background-color: #A9A9A9; display: table;text-align: center;\">\r\n" + 
+				"					<h1>"+codigo+"</h1>\r\n" + 
+				"				</div>\r\n" + 
+				"				<p><i>*ESTE E-MAIL FOI GERADO AUTOMATICAMENTE PELO SISTEMA DA CAURN. POR FAVOR, NÃO RESPONDÊ-LO.*</i></p>\r\n" + 
+				"				</tr><tr></tr>\r\n" + 
+				"				</table>\t\n" + "\t\t       \n" + "\t</body>";
+
+		return texto;
+	}
+	
+	public void enviaConfirmacaoAutorizacaoEmail(Pedido autorizacao, UsuarioSolusAppMob beneficiario) {
+
+		try {
+
+            MimeMessage message = emailSender.createMimeMessage();
+
+            message.setSubject("Confirmação de solicitação de autorização.");
+            MimeMessageHelper helper;
+            helper = new MimeMessageHelper(message, true);
+			String email = "";
+			if(beneficiario.getEmail() == null){
+				if(beneficiario.getBeneficiario() != null){
+					email = beneficiario.getBeneficiario().getEmailTitular();
+				}		
+			} else {
+				email = beneficiario.getEmail();
+			}
+			if(email != null && !email.equals("")){
+				helper.setTo(email);
+				helper.setFrom("naoresponder@caurn.com.br", "CAURN");
+				helper.setText(getTemplateConfirmacaoAutorizacao(autorizacao, beneficiario), true);
+				emailSender.send(message);
+			}
+        } catch (Exception e) {
+        	e.printStackTrace();
+        }
+        
+	}
+	
+	private String getTemplateConfirmacaoAutorizacao(Pedido autorizacao, UsuarioSolusAppMob beneficiario) {
+		String texto = "<body style=\"margin: 0; padding: 0;\">\t\n" + "\t\n"
+				+ "<table align=\"center\" width=\"600\" style=\"border-collapse: collapse;font-family:Roboto-Regular,Helvetica,Arial,sans-serif;font-size:14px \">\r\n" + 
+				"	<tr><td align=\"center\" bgcolor=\"#CC2331\" style=\"padding: 40px 0 30px 0;\">\r\n" + 
+				"		<h1 style=\"color:#ffffff;\">CAURN</h1></td>\r\n" + 
+				"				</tr><tr>\r\n" + 
+				"				<td bgcolor=  \"#F0F0F0  \" style=  \"padding: 40px 30px 40px 30px;  \">Olá Beneficiario, <br>  <br> A solicitação foi cadastrada com sucesso, segue abaixo os dados da solicitação da autorização: <br>\r\n" + 
+				" <p> <b>Beneficiario: </b>\r\n" 
+				+ "<b style=\"text-transform: uppercase;\n"
+				+ "                        \">"+autorizacao.getBeneficiario().getNomeBeneficiario()+"</b></p>\r\n"  
+				+" <p> <b>Profissional de Saúde: </b>\r\n" 
+				+ "<b style=\"text-transform: uppercase;\n"
+				+ "                        \">"+(Strings.isNullOrEmpty(autorizacao.getPrestador().getNomeSolicitante()) ? "NÃO INFORMADO" : autorizacao.getPrestador().getNomeSolicitante()) +"</b></p>\r\n" 
+				+" <p> <b>Local de Atendimento: </b>\r\n" 
+				+ "<b style=\"text-transform: uppercase;\n"
+				+ "                        \">"+(Objects.isNull((autorizacao.getLocalAtendimento())) ? "NÃO INFORMADO" : autorizacao.getLocalAtendimento().getNome()) +"</b></p>\r\n"
+				+" <p> <b>Observações: </b>\r\n" 
+				+ "<b style=\"text-transform: uppercase;\n"
+				+ "                        \">"+(Strings.isNullOrEmpty(autorizacao.getObservacao()) ? "NÃO INFORMADO" : autorizacao.getObservacao()) +"</b></p>\r\n"
+				+" <p> Em caso de informação divergente, pedimos que entre em contato pelo telefone (3311.3665) ou pelo e-mail: atendimento@caurn.com.br. </p>\r\n"
+				+ "<p> INFORMAMOS QUE A GUIA SERÁ TRATADA PELO ATENDIMENTO E O RETORNO VAI SE DAR PELO E-MAIL INFORMADO OU CADASTRADO NO SISTEMA. </p>\r\n\n"
+				+ "<p> CASO O ATENDIMENTO NECESSITE DE INFORMAÇÃO ADICIONAL PARA A AUTORIZAÇÃO, O SETOR ENTRARÁ EM CONTATO POR TELEFONE, E-MAIL OU SMS. MANTENHA SEU CADASTRO ATUALIZADO. </p>\r\n"
+				+ "				<p><i>*ESTE E-MAIL FOI GERADO AUTOMATICAMENTE PELO SISTEMA DA CAURN. POR FAVOR, NÃO RESPONDÊ-LO.*</i></p>\r\n" + 
+				"				</tr><tr></tr>\r\n" + 
+				"				</table>\t\n" + "\t\t       \n" + "\t</body>";
+
+		return texto;
+	}
+	
+	public void enviaConfirmacaoAgendamentoEmail(Agendas agendamento, UsuarioSolusAppMob usuario) {
+
+		try {
+
+            MimeMessage message = emailSender.createMimeMessage();
+
+            message.setSubject("Área do Beneficiario - Solicitação de Agendamento.", "text/plain; charset=UTF-8");
+            MimeMessageHelper helper;
+            helper = new MimeMessageHelper(message, true);
+			String email = "";
+			if(usuario.getEmail() == null){
+				if(usuario.getBeneficiario() != null){
+					email = usuario.getBeneficiario().getEmailTitular();
+				}		
+			} else {
+				email = usuario.getEmail();
+			}
+			if(email != null && !email.equals("")){
+				helper.setTo(email);
+				helper.setFrom("naoresponder@caurn.com.br", "CAURN");
+				helper.setText(getTemplateConfirmacaoAgendamento(agendamento), true);
+				emailSender.send(message);
+			}
+        } catch (Exception e) {
+        	e.printStackTrace();
+        }
+        
+	}
+	
+	private String getTemplateConfirmacaoAgendamento(Agendas agendamento) {
+		SimpleDateFormat formatador = new SimpleDateFormat("dd/MM/yyyy");
+		
+		String texto = "<body style=\"margin: 0; padding: 0;\">\t\n" + "\t\n"
+				+ "<table align=\"center\" width=\"600\" style=\"border-collapse: collapse;font-family:Roboto-Regular,Helvetica,Arial,sans-serif;font-size:14px \">\r\n" + 
+				"	<tr><td align=\"center\" bgcolor=\"#CC2331\" style=\"padding: 40px 0 30px 0;\">\r\n" + 
+				"		<h1 style=\"color:#ffffff;\">CAURN</h1></td>\r\n" + 
+				"				</tr><tr>\r\n" + 
+				"				<td bgcolor=  \"#F0F0F0  \" style=  \"padding: 40px 30px 40px 30px;  \">Olá Beneficiario, <br>  <br> A solicitação foi cadastrada com sucesso, segue abaixo os dados da solicitação de agendamento: <br>\r\n" + 
+				" <p> <b>Beneficiario: </b>\r\n" 
+				+ "<b style=\"text-transform: uppercase;\n"
+				+ "                        \">"+agendamento.getPaciente().getNome()+"</b></p>\r\n"  
+				+" <p> <b>Local: </b>\r\n" 
+				+ "<b style=\"text-transform: uppercase;\n"
+				+ "                        \">"+ agendamento.getMedico().getEmpresa().getNome()
+						+ "</b></p>\r\n" 
+				+" <p> <b>Médico(a): </b>\r\n" 
+				+ "<b style=\"text-transform: uppercase;\n"
+				+ "                        \">"+ agendamento.getMedico().getNome()
+						+ "</b></p>\r\n" 
+				+" <p> <b>Data: </b>\r\n" 
+				+ "<b style=\"text-transform:lowercase ;\n"
+				+ "                        \">"+formatador.format(agendamento.getDataAgenda())
+				+ " às "+ agendamento.getHoraInicio()+"</b></p>\r\n" 
+				+" <p>Atenção, Beneficiário, lembre-se de confirmar o agendamento.</p>\r\n" +				
+				"				<p><i>*ESTE E-MAIL FOI GERADO AUTOMATICAMENTE PELO SISTEMA DA CAURN. POR FAVOR, NÃO RESPONDÊ-LO.*</i></p>\r\n" + 
+				"				</tr><tr></tr>\r\n" + 
+				"				</table>\t\n" + "\t\t       \n" + "\t</body>";
+
+		return texto;
+	}
+	
+	public void enviaAlertaConfirmacaoAgendamentoEmail(Agendas agendamento, UsuarioSolusAppMob usuario) {
+
+		try {
+
+            MimeMessage message = emailSender.createMimeMessage();
+
+            message.setSubject("Área do Beneficiario - Agendamento em aberto.");
+            MimeMessageHelper helper;
+            helper = new MimeMessageHelper(message, true);
+			String email = "";
+			if(usuario.getEmail() == null){
+				if(usuario.getBeneficiario() != null){
+					email = usuario.getBeneficiario().getEmailTitular();
+				}		
+			} else {
+				email = usuario.getEmail();
+			}
+			if(email != null && !email.equals("")){
+				helper.setTo(email);
+				helper.setFrom("naoresponder@caurn.com.br", "CAURN");
+				helper.setText(getTemplateAlertaConfirmacaoAgendamento(agendamento), true);
+				emailSender.send(message);
+			}				
+        } catch (Exception e) {
+        	e.printStackTrace();
+        }
+        
+	}
+	
+	private String getTemplateAlertaConfirmacaoAgendamento(Agendas agendamento) {
+		SimpleDateFormat formatador = new SimpleDateFormat("dd/MM/yyyy");
+		
+		String texto = "<body style=\"margin: 0; padding: 0;\">\t\n" + "\t\n"
+				+ "<table align=\"center\" width=\"600\" style=\"border-collapse: collapse;font-family:Roboto-Regular,Helvetica,Arial,sans-serif;font-size:14px \">\r\n" + 
+				"	<tr><td align=\"center\" bgcolor=\"#CC2331\" style=\"padding: 40px 0 30px 0;\">\r\n" + 
+				"		<h1 style=\"color:#ffffff;\">CAURN</h1></td>\r\n" + 
+				"				</tr><tr>\r\n" + 
+				"				<td bgcolor=  \"#F0F0F0  \" style=  \"padding: 40px 30px 40px 30px;  \">Olá Beneficiario, <br><br>"
+				+ "A solicitação de agendamento para o dia " + formatador.format(agendamento.getDataAgenda()) 
+				+ " às " +
+				 agendamento.getHoraInicio()
+				+ " com o médico(a) " + agendamento.getMedico().getNome() + 
+				 " no(a) " + agendamento.getMedico().getEmpresa().getNome()+
+				 " ainda não foi confirmado. <b>Por favor, confirme o quanto antes.</b><br>\r\n"+			
+				"				<p><i>*ESTE E-MAIL FOI GERADO AUTOMATICAMENTE PELO SISTEMA DA CAURN. POR FAVOR, NÃO RESPONDÊ-LO.*</i></p>\r\n" + 
+				"				</tr><tr></tr>\r\n" + 
+				"				</table>\t\n" + "\t\t       \n" + "\t</body>";
+
+		return texto;
+	}
+}

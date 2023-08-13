@@ -1,0 +1,88 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.mkdata.domain.EspecialidadeMkdata;
+import br.com.mkapi.mkdata.repository.EspecialidadeRepositoryMkdata;
+import br.com.mkapi.solus.domain.EspecialidadeDesativada;
+import br.com.mkapi.solus.repository.EspecialidadeDesativadaRepository;
+
+@Controller
+@RequestMapping("/api/solus/especialidadeDesativada")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class EspecialidadeDesativadaController {
+    
+    @Autowired
+	private EspecialidadeDesativadaRepository especialidadeDesativadaRepository;
+
+    @Autowired
+    private EspecialidadeRepositoryMkdata especialidadeRepositoryMkdata;
+
+    @GetMapping
+	public ResponseEntity<List<EspecialidadeDesativada>> getAll() {
+		List<EspecialidadeDesativada> faqs = especialidadeDesativadaRepository.findAll();
+		
+		return new ResponseEntity<>(faqs, HttpStatus.OK);
+	}
+
+    @PostMapping
+	public ResponseEntity<Object> post(@RequestBody EspecialidadeDesativada especialidade){
+		if(especialidade.getIdEspecialidade() != null){
+            if(especialidade.getDescricao() == null){
+				//Configura automaticamente a descrição (nome) da especialidade.
+                Optional<EspecialidadeMkdata> e = especialidadeRepositoryMkdata.findById(especialidade.getIdEspecialidade());
+                if(e.isPresent()){
+                    especialidade.setDescricao(e.get().getNome());
+                }
+            }
+
+			especialidade = especialidadeDesativadaRepository.save(especialidade);
+			return new ResponseEntity<>(especialidade, HttpStatus.OK);
+		}
+		else
+			return new ResponseEntity<>("É necessário informar o id da especialidade.", HttpStatus.FORBIDDEN);
+	}
+
+    @PostMapping("/{id}")
+	public ResponseEntity<Object> update(@RequestBody EspecialidadeDesativada especialidade, @PathVariable(value = "id") Long id){
+		Optional<EspecialidadeDesativada> opt = especialidadeDesativadaRepository.findById(id);
+		if(opt.isPresent()){
+            EspecialidadeDesativada especialidadeDesativada = opt.get();
+            especialidadeDesativada.setIdEspecialidade(especialidade.getIdEspecialidade());
+
+            Optional<EspecialidadeMkdata> e = especialidadeRepositoryMkdata.findById(especialidade.getIdEspecialidade());
+            if(e.isPresent()){
+                especialidadeDesativada.setDescricao(e.get().getNome());
+            }
+
+			especialidadeDesativada = especialidadeDesativadaRepository.save(especialidadeDesativada);
+			return new ResponseEntity<>(especialidade, HttpStatus.OK);
+		}
+		else
+			return new ResponseEntity<>("Especialidade não encontrada.", HttpStatus.FORBIDDEN);
+	}    
+
+	@DeleteMapping("/{id}")
+	public ResponseEntity<EspecialidadeDesativada> post(@PathVariable(value = "id") Long id){
+		Optional<EspecialidadeDesativada> opt = especialidadeDesativadaRepository.findById(id);
+		if(!opt.isPresent())
+			return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+		else{
+			especialidadeDesativadaRepository.deleteById(id);
+			return new ResponseEntity<>(HttpStatus.OK);	
+		}
+	}    
+}

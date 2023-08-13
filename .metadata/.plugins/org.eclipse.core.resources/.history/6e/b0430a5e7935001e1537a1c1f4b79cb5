@@ -1,0 +1,20 @@
+package br.ufrn.imd.solicitacaurn.solus.controller;
+
+import java.util.UUID;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+import br.com.mkapi.solus.domain.AbstractEntity;
+
+@Controller
+@RequestMapping("/api/solus/beneficiario")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class BeneficiarioSolusController extends AbstractController<AbstractEntity>{	
+	@Override
+	protected JpaRepository<AbstractEntity, UUID> getRepository() {
+		return null;
+	}
+}

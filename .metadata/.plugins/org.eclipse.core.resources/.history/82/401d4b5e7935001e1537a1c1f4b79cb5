@@ -1,0 +1,14 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.ItemPedido;
+
+public interface ItemPedidoRepository extends JpaRepository<ItemPedido, Long> {
+
+	@Query(value = "SELECT ip.* FROM TAB_ITEMPEDIDO ip WHERE ip.ID_PEDIDO = ?1", nativeQuery = true)
+	List<ItemPedido> getByIdPedido(Long idPedido);
+}

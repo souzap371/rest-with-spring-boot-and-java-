@@ -1,0 +1,447 @@
+package br.ufrn.imd.solicitacaurn.cassi.controller;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+
+import br.com.mkapi.cassi.domain.EspecialidadeCassi;
+import br.com.mkapi.cassi.domain.MunicipioCassiDesativado;
+import br.com.mkapi.cassi.domain.RedeCredenciada;
+import br.com.mkapi.cassi.domain.RedeCredenciadaFavoritos;
+import br.com.mkapi.cassi.domain.RedeCredenciadaFiltro;
+import br.com.mkapi.cassi.domain.TipoPrestadorSoc;
+import br.com.mkapi.cassi.repository.EspecialidadeCassiRepository;
+import br.com.mkapi.cassi.repository.MunicipioCassiDesativadoRepository;
+import br.com.mkapi.cassi.repository.RedeCredenciadaCustomRepository;
+import br.com.mkapi.cassi.repository.RedeCredenciadaFavoritosRepository;
+import br.com.mkapi.cassi.repository.RedeCredenciadaRepository;
+import br.com.mkapi.cassi.repository.TipoPrestadorSocRepository;
+
+import org.springframework.web.bind.annotation.RequestBody;
+
+import java.util.Optional;
+
+import org.apache.poi.ss.usermodel.Cell;  
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+@Controller
+@RequestMapping("/api/cassi/redeCredenciada")
+@CrossOrigin(origins = "*", allowedHeaders = "*")
+public class RedeCredenciadaController {
+    
+    @Autowired
+	private RedeCredenciadaRepository redeCredenciadaRepository;
+
+    @Autowired
+	private RedeCredenciadaFavoritosRepository redeCredenciadaFavoritosRepository;
+
+    @Autowired
+	private RedeCredenciadaCustomRepository redeCredenciadaCustomRepository;
+
+	@Autowired
+	private EspecialidadeCassiRepository especialidadeCassiRepository;
+
+	@Autowired
+	private TipoPrestadorSocRepository tipoPrestadorSocRepository;	
+
+    @Autowired
+	private MunicipioCassiDesativadoRepository municipioCassiDesativadoRepository;
+
+	/*
+	 * Obter uma Rede Credenciada a partir do cpf/cnpj.
+	 * Este campo pode apresentar valores duplicados na tabela.
+	 */
+	@GetMapping("getByCpfcnpj/{cpfcnpj}")
+	public ResponseEntity<?> getByCpfcnpj(@PathVariable(value = "cpfcnpj") String cpfcnpj) {
+		List<RedeCredenciada> result = redeCredenciadaRepository.getByCpfcnpj(cpfcnpj);
+        return new ResponseEntity<>(result, HttpStatus.OK);
+	}    
+
+    //Filtro:
+    @PostMapping("/filtroRedeCredenciada/{offset}")
+	public ResponseEntity<List<RedeCredenciada>> getAllFiltrado(@RequestBody RedeCredenciadaFiltro filtro, @PathVariable(value = "offset") Integer offset) {
+		List<RedeCredenciada> result = redeCredenciadaCustomRepository.findAllByFiltro(filtro, offset);
+		return new ResponseEntity<>(result, HttpStatus.OK);
+	}
+
+    @PostMapping("/filtroRedeCredenciadaEletiva/{offset}")
+	public ResponseEntity<List<RedeCredenciada>> getAllFiltradoEletiva(@RequestBody RedeCredenciadaFiltro filtro, @PathVariable(value = "offset") Integer offset) {
+		List<RedeCredenciada> result = redeCredenciadaCustomRepository.findAllByFiltroEletivo(filtro, offset);
+		return new ResponseEntity<>(result, HttpStatus.OK);
+	}	
+
+    //Favoritos:
+	@GetMapping("/getFavoritosUrgenciaByUsuario/{idUsuario}/{offset}")
+	public ResponseEntity<List<RedeCredenciada>> getFavoritosUrgenciaByUsuario(@PathVariable("idUsuario") Long idUsuario, @PathVariable(value = "offset") Integer offset) {
+		List<RedeCredenciadaFavoritos> listIdFavoritos = redeCredenciadaCustomRepository.getFavoritosUrgenciaByUsuario(idUsuario, offset);
+
+		List<RedeCredenciada> favoritos = new ArrayList<RedeCredenciada>();
+		listIdFavoritos.forEach(rcf -> {
+			Optional<RedeCredenciada> opt = redeCredenciadaRepository.findById(rcf.getIdRedeCredenciada());
+			if(opt.isPresent()){
+				RedeCredenciada rc = opt.get();
+				rc.setFavorito(true);
+				favoritos.add(rc);
+			}
+		});
+
+		return new ResponseEntity<>(favoritos, HttpStatus.OK);
+	}
+
+	@GetMapping("/getFavoritosEletivaRNByUsuario/{idUsuario}/{offset}")
+	public ResponseEntity<List<RedeCredenciada>> getFavoritosEletivaRNByUsuario(@PathVariable("idUsuario") Long idUsuario, @PathVariable(value = "offset") Integer offset) {
+		List<RedeCredenciadaFavoritos> listIdFavoritos = redeCredenciadaCustomRepository.getFavoritosEletivaRNByUsuario(idUsuario, offset);
+
+		List<RedeCredenciada> favoritos = new ArrayList<RedeCredenciada>();
+		listIdFavoritos.forEach(rcf -> {
+			Optional<RedeCredenciada> opt = redeCredenciadaRepository.findById(rcf.getIdRedeCredenciada());
+			if(opt.isPresent()){
+				RedeCredenciada rc = opt.get();
+				rc.setFavorito(true);
+				favoritos.add(rc);
+			}
+		});
+
+		return new ResponseEntity<>(favoritos, HttpStatus.OK);
+	}	
+
+	@GetMapping("/getFavoritosEletivaForaRNByUsuario/{idUsuario}/{offset}")
+	public ResponseEntity<List<RedeCredenciada>> getFavoritosEletivaForaRNByUsuario(@PathVariable("idUsuario") Long idUsuario, @PathVariable(value = "offset") Integer offset) {
+		List<RedeCredenciadaFavoritos> listIdFavoritos = redeCredenciadaCustomRepository.getFavoritosEletivaForaRNByUsuario(idUsuario, offset);
+
+		List<RedeCredenciada> favoritos = new ArrayList<RedeCredenciada>();
+		listIdFavoritos.forEach(rcf -> {
+			Optional<RedeCredenciada> opt = redeCredenciadaRepository.findById(rcf.getIdRedeCredenciada());
+			if(opt.isPresent()){
+				RedeCredenciada rc = opt.get();
+				rc.setFavorito(true);
+				favoritos.add(rc);
+			}
+		});
+
+		return new ResponseEntity<>(favoritos, HttpStatus.OK);
+	}		
+
+	/*
+	 * Endpoint para adicionar uma Rede Credenciada como favorita de um usuário.
+	 * O parâmetro passado é o id da Rede Credenciada, e o id do usuário no AppMob.
+	 */
+	@PostMapping("/updateFavorito/{idRedeCredenciada}/{idUsuario}")
+	public ResponseEntity<?> updateFavorito(@PathVariable("idRedeCredenciada") Long idRedeCredenciada,
+			@PathVariable("idUsuario") Long idUsuario) {
+		try {
+			Optional<RedeCredenciada> opt = redeCredenciadaRepository.findById(idRedeCredenciada);
+			if(opt.isPresent()){
+				RedeCredenciadaFavoritos r = redeCredenciadaFavoritosRepository.verificaFavorito(idRedeCredenciada, idUsuario);
+
+				if (r == null) {
+					r = new RedeCredenciadaFavoritos();
+					r.setIdRedeCredenciada(idRedeCredenciada);
+					r.setIdUsuario(idUsuario);
+					r.setFavorito(true);
+					r.setPrestador(opt.get().getPrestador());
+				} else {
+					r.setFavorito(!r.getFavorito());
+				}
+
+				redeCredenciadaFavoritosRepository.save(r);
+			} else{
+				return new ResponseEntity<>("Rede Credenciada não encontrada.", HttpStatus.FORBIDDEN);
+			}
+
+			return new ResponseEntity<>("Favorito atualizado com sucesso.", HttpStatus.OK);
+		} catch (Exception e) {
+			return new ResponseEntity<>("Erro ao adicionar favorito.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}    
+
+	//Especialidade, município e UF:
+	@GetMapping("/getAllEspecialidade")
+	public ResponseEntity<List<EspecialidadeCassi>> getAllEspecialidade() {
+		List<EspecialidadeCassi> especialidades = especialidadeCassiRepository.findAll();
+		return new ResponseEntity<>(especialidades, HttpStatus.OK);
+	}	
+
+	@PostMapping("/getEspecialidadeByNome/{term}")
+	public ResponseEntity<List<EspecialidadeCassi>> getEspecialidadeByNome(@RequestBody RedeCredenciadaFiltro filtro, @PathVariable("term") String term) {
+		term = term.replace(" ", "%");
+
+		List<EspecialidadeCassi> especialidades = redeCredenciadaCustomRepository.findEspecialidadeByNameAndFiltro(filtro, term);
+		return new ResponseEntity<>(especialidades, HttpStatus.OK);
+	}		
+
+	@GetMapping("/getMunicipiosByUf/{uf}")
+	public ResponseEntity<List<String>> getMunicipiosByUf(@PathVariable("uf") String uf) {
+		List<String> municipios = redeCredenciadaRepository.getMunicipiosByUf(uf);
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(MunicipioCassiDesativado mcd : municipioCassiDesativados){
+			if(mcd.getUf().equals(uf) && municipios.contains(mcd.getMunicipio())){
+				municipios.remove(mcd.getMunicipio());
+			}
+		}
+
+		return new ResponseEntity<>(municipios, HttpStatus.OK);
+	}	
+
+	@GetMapping("/getMunicipiosByUfAndNome/{uf}/{term}")
+	public ResponseEntity<List<String>> getMunicipiosByUfAndNome(@PathVariable("uf") String uf, @PathVariable("term") String term) {
+		term = term.replace(" ", "%");
+
+		List<String> municipios = redeCredenciadaRepository.getMunicipiosByUfAndNome(uf, term);
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(MunicipioCassiDesativado mcd : municipioCassiDesativados){
+			if(mcd.getUf().equals(uf) && municipios.contains(mcd.getMunicipio())){
+				municipios.remove(mcd.getMunicipio());
+			}
+		}
+
+		return new ResponseEntity<>(municipios, HttpStatus.OK);
+	}			
+
+	@GetMapping("/getAllUf")
+	public ResponseEntity<List<String>> getAllUf() {
+		List<String> ufs = redeCredenciadaRepository.getAllUf();
+		return new ResponseEntity<>(ufs, HttpStatus.OK);
+	}	
+
+	//Tipo Prestador:
+	@PostMapping("/getAllTipoPrestadorSocByFiltro")
+	public ResponseEntity<List<TipoPrestadorSoc>> getAllTipoPrestadorSocByFiltro(@RequestBody RedeCredenciadaFiltro filtro) {
+		List<TipoPrestadorSoc> prestadores = redeCredenciadaCustomRepository.findAllTipoPrestadorSocByFiltro(filtro);
+		return new ResponseEntity<>(prestadores, HttpStatus.OK);
+	}
+
+	@GetMapping("/getAllTipoPrestadorSoc")
+	public ResponseEntity<List<TipoPrestadorSoc>> getAllTipoPrestadorSoc() {
+		List<TipoPrestadorSoc> prestadores = tipoPrestadorSocRepository.getAllAtivo();
+		return new ResponseEntity<>(prestadores, HttpStatus.OK);
+	}
+
+	@PostMapping("/addTipoPrestadorSoc")
+	public ResponseEntity<?> addTipoPrestadorSoc(@RequestBody TipoPrestadorSoc tipoPrestadorSoc) {
+		if(StringUtils.isEmpty(tipoPrestadorSoc.getDescricao())){
+			return new ResponseEntity<>("É necessário informar a descrição do tipo do prestador.", HttpStatus.FORBIDDEN);
+		}
+
+		tipoPrestadorSoc.setAtivo(true);
+		tipoPrestadorSoc = tipoPrestadorSocRepository.save(tipoPrestadorSoc);
+		return new ResponseEntity<>(tipoPrestadorSoc, HttpStatus.OK);
+	}
+
+	@DeleteMapping("/deleteTipoPrestadorSoc/{id}")
+	public ResponseEntity<?> deleteTipoPrestadorSoc(@PathVariable(value = "id") Long id){
+		try{
+			Optional<TipoPrestadorSoc> opt = tipoPrestadorSocRepository.findById(id);
+			
+			if(!opt.isPresent())
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			else{
+				tipoPrestadorSocRepository.deleteById(id);
+				return new ResponseEntity<>(HttpStatus.OK);	
+			}
+		} catch(Exception e){
+        	return new ResponseEntity<>("Erro ao deletar Tipo de Prestador.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+    @PostMapping("/atualizarTipoPrestadorSoc/{id}")
+	public ResponseEntity<?> atualizarTipoPrestadorSoc(@PathVariable(value = "id") Long id, @RequestBody TipoPrestadorSoc tipoPrestadorSoc){
+		try{
+			if(StringUtils.isEmpty(tipoPrestadorSoc.getDescricao())){
+				return new ResponseEntity<>("É necessário informar a descrição do tipo do prestador.", HttpStatus.FORBIDDEN);
+			}
+
+			Optional<TipoPrestadorSoc> opt = tipoPrestadorSocRepository.findById(id);
+		
+			if(!opt.isPresent())
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			else{
+				TipoPrestadorSoc oldTps = opt.get();
+				oldTps.setDescricao(tipoPrestadorSoc.getDescricao());
+				oldTps = tipoPrestadorSocRepository.save(oldTps);
+				return new ResponseEntity<>(oldTps, HttpStatus.OK);
+			}
+		}
+		catch(Exception e){
+        	return new ResponseEntity<>("Erro ao editar Dúvida Frequente.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}	
+
+    @PostMapping("/alterarAtivoTipoPrestadorSoc/{id}")
+	public ResponseEntity<?> alterarAtivoTipoPrestadorSoc(@PathVariable(value = "id") Long id){
+		try{
+			Optional<TipoPrestadorSoc> opt = tipoPrestadorSocRepository.findById(id);
+		
+			if(!opt.isPresent())
+				return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+			else{
+				TipoPrestadorSoc tps = opt.get();
+				tps.setAtivo(!tps.getAtivo());
+				tps = tipoPrestadorSocRepository.save(tps);
+				return new ResponseEntity<>(tps, HttpStatus.OK);
+			}
+		}
+		catch(Exception e){
+        	return new ResponseEntity<>("Erro ao editar Tipo de Prestador.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/*
+	 * Atualizar tabela de Credenciados.
+	 * OBS: Este endpoint apaga todos os dados da tabela de credenciados e 
+	 * da tabela de especialidades da cassi, e então preenche ambas com os novos dados.
+	 */
+    @PostMapping("/updateTabelaCredenciados")
+	public ResponseEntity<?> updateTabelaCredenciados(@RequestParam("file") MultipartFile file) {
+		try {
+			String TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+			if (!TYPE.equals(file.getContentType())) {
+				return new ResponseEntity<>("Tipo de arquivo não aceito.", HttpStatus.INTERNAL_SERVER_ERROR);
+			}
+
+			//creating Workbook instance that refers to .xlsx file
+			XSSFWorkbook wb = new XSSFWorkbook(file.getInputStream());  
+
+			//creating a Sheet object to retrieve the object  
+			XSSFSheet sheet = wb.getSheetAt(0);
+
+			//Contador temporário:
+			int i = -1;
+
+			//iterating over excel file  
+			Iterator<Row> itr = sheet.iterator();  
+			
+			ArrayList<RedeCredenciada> redeCredenciadas = new ArrayList<RedeCredenciada>();
+			ArrayList<String> especialidadesTabela = new ArrayList<String>();
+
+			while (itr.hasNext()) {  
+				i++;
+
+				Row row = itr.next();  
+
+				if(i == 0) continue;
+
+				//iterating over each column
+				Iterator<Cell> cellIterator = row.cellIterator();
+
+				RedeCredenciada rc = new RedeCredenciada();
+				rc.setId((long) i);
+
+				while (cellIterator.hasNext()) {  
+					Cell cell = cellIterator.next();  					
+
+					switch(cell.getColumnIndex()){
+						case 0:
+							rc.setCpfcnpj(cell.getStringCellValue());
+							break;
+						case 1:
+							rc.setPrestador(cell.getStringCellValue());
+							break;	
+						case 2:
+							rc.setPrestadorNomeFantasia(cell.getStringCellValue());
+							break;	
+						case 3:
+							rc.setCnes(cell.getStringCellValue());
+							break;			
+						case 4:
+							rc.setTipoPrestadorSOC(cell.getStringCellValue());
+							break;
+						case 5:
+							String especialidades = cell.getStringCellValue().substring(cell.getStringCellValue().lastIndexOf(":") + 1).trim();
+							rc.setEspecialidades(especialidades);
+							if(!especialidadesTabela.contains(especialidades)) especialidadesTabela.add(especialidades);
+							break;	
+						case 6:
+							rc.setUf(cell.getStringCellValue());
+							break;		
+						case 7:
+							rc.setMunicipio(cell.getStringCellValue());
+							break;		
+						case 8:
+							rc.setBairro(cell.getStringCellValue());
+							break;	
+						case 9:
+							rc.setLogradouro(cell.getStringCellValue());
+							break;	
+						case 10:
+							rc.setCep(cell.getStringCellValue());
+							break;	
+						case 11:
+							rc.setTelefone1(cell.getStringCellValue());
+							break;					
+						case 12:
+							rc.setTelefone2(cell.getStringCellValue());
+							break;
+					}
+				}  
+
+				redeCredenciadas.add(rc);				
+			}  
+
+			wb.close();
+
+			//TRATAR ESPECIALIDADES
+			ArrayList<String> especialidadesString = new ArrayList<String>();
+			for(String e : especialidadesTabela){
+				String[] especialidadesElemento = e.split("/");
+				for(String s : especialidadesElemento){
+					if(!especialidadesString.contains(s.trim())){
+						especialidadesString.add(s.trim());
+					}
+				}
+			}
+			Collections.sort(especialidadesString);
+
+			long count = 1;
+			ArrayList<EspecialidadeCassi> especialidadesCassi = new ArrayList<EspecialidadeCassi>();
+			for(String e : especialidadesString){
+				EspecialidadeCassi ec = new EspecialidadeCassi();
+				ec.setId(count);
+				ec.setAtivo("1");
+				ec.setNome(e);
+				especialidadesCassi.add(ec);
+				count++;
+			} 
+
+			//ATUALIZAR TABELAS
+			if(sheet.getLastRowNum() == redeCredenciadas.size()){
+				//ATUALIZAÇÃO DA TABELA DE REDE CREDENCIADA
+				redeCredenciadaRepository.deletarTodasRedesCredenciadas();
+				redeCredenciadaRepository.flush();
+				redeCredenciadaRepository.saveAll(redeCredenciadas);
+			}			
+
+			if(especialidadesCassi != null && especialidadesCassi.size() > 0){
+				//ATUALIZAÇÃO DA TABELA DE ESPECIALIDADE CASSI
+				especialidadeCassiRepository.deletarTodasEspecialidadesCassi();
+				especialidadeCassiRepository.flush();
+				especialidadeCassiRepository.saveAll(especialidadesCassi);
+			}
+
+			return new ResponseEntity<>("Tabela de credenciados atualizada com sucesso.", HttpStatus.OK);
+		} catch (Exception e) {
+			e.printStackTrace(); 
+			return new ResponseEntity<>("Erro ao criar tabela de credenciados.", HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+}

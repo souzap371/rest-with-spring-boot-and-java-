@@ -1,0 +1,450 @@
+package br.ufrn.imd.solicitacaurn.cassi.repository;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Objects;
+
+import javax.persistence.EntityManager;
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.cassi.domain.EspecialidadeCassi;
+import br.com.mkapi.cassi.domain.MunicipioCassiDesativado;
+import br.com.mkapi.cassi.domain.RedeCredenciada;
+import br.com.mkapi.cassi.domain.RedeCredenciadaFavoritos;
+import br.com.mkapi.cassi.domain.RedeCredenciadaFiltro;
+import br.com.mkapi.cassi.domain.TipoPrestadorSoc;
+
+@Repository
+public class RedeCredenciadaCustomRepositoryImpl implements RedeCredenciadaCustomRepository{
+	@Autowired
+	@Qualifier("mainEntityManagerFactory")
+	private EntityManager entityManager;
+
+	@Autowired
+	@Qualifier("solus")
+	private DataSource dt;
+	
+	@Autowired
+	private RedeCredenciadaFavoritosRepository redeCredenciadaFavoritosRepository;
+
+	@Autowired
+	private MunicipioCassiDesativadoRepository municipioCassiDesativadoRepository;
+
+	@Override
+	public List<RedeCredenciadaFavoritos> getFavoritosUrgenciaByUsuario(Long idUsuario, Integer offset){
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT * FROM ( "
+		+ " SELECT row_number() OVER (ORDER BY rcf.prestador ASC) linha, rcf.* FROM REDE_CREDENCIADA_FAVORITOS rcf "
+		+ " INNER JOIN REDE_CREDENCIADA rc ON rcf.ID_REDE_CREDENCIADA = rc.ID WHERE rc.cpfcnpj IS NOT NULL ");
+
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+
+		queryBuilder.append(" AND rcf.favorito=1 and rcf.id_usuario =:idUsuario ");
+		parameters.addValue("idUsuario", idUsuario);
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(int i=0; i<municipioCassiDesativados.size(); i++){
+			queryBuilder.append(" AND (UPPER(rc.MUNICIPIO) != UPPER(:municipioDesativado" + i + ") OR UPPER(rc.UF) != UPPER(:municipioUfDesativado" + i + "))");
+			parameters.addValue("municipioDesativado" + i, municipioCassiDesativados.get(i).getMunicipio());
+			parameters.addValue("municipioUfDesativado" + i, municipioCassiDesativados.get(i).getUf());
+		}
+
+		queryBuilder.append(" AND upper(rc.TIPO_PRESTADOR_SOC) LIKE '%HOSPITAL%' ");
+
+		queryBuilder.append(" ) WHERE linha BETWEEN (:offset + 1) AND (:offset + 10) ");
+		parameters.addValue("offset", offset);
+
+		List<RedeCredenciadaFavoritos> credenciados = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(),parameters, new RowMapper<RedeCredenciadaFavoritos>() {
+			@Override
+			public RedeCredenciadaFavoritos mapRow(ResultSet rs, int rowNum) throws SQLException {
+				RedeCredenciadaFavoritos r = new RedeCredenciadaFavoritos();
+
+				r.setId(rs.getLong("ID"));
+				r.setFavorito(true);
+				r.setIdRedeCredenciada(rs.getLong("ID_REDE_CREDENCIADA"));
+				r.setIdUsuario(rs.getLong("ID_USUARIO"));
+				r.setPrestador(rs.getString("PRESTADOR"));			    
+				
+				return r;
+			}
+		});
+		return credenciados;
+	}
+
+	@Override
+	public List<RedeCredenciadaFavoritos> getFavoritosEletivaRNByUsuario(Long idUsuario, Integer offset){
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT * FROM ( "
+		+ " SELECT row_number() OVER (ORDER BY rcf.prestador ASC) linha, rcf.* FROM REDE_CREDENCIADA_FAVORITOS rcf "
+		+ " INNER JOIN REDE_CREDENCIADA rc ON rcf.ID_REDE_CREDENCIADA = rc.ID WHERE rc.cpfcnpj IS NOT NULL ");
+
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+
+		queryBuilder.append(" AND rcf.favorito=1 and rcf.id_usuario =:idUsuario ");
+		parameters.addValue("idUsuario", idUsuario);
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(int i=0; i<municipioCassiDesativados.size(); i++){
+			queryBuilder.append(" AND (UPPER(rc.MUNICIPIO) != UPPER(:municipioDesativado" + i + ") OR UPPER(rc.UF) != UPPER(:municipioUfDesativado" + i + "))");
+			parameters.addValue("municipioDesativado" + i, municipioCassiDesativados.get(i).getMunicipio());
+			parameters.addValue("municipioUfDesativado" + i, municipioCassiDesativados.get(i).getUf());
+		}
+
+		queryBuilder.append(" AND upper(rc.UF) = 'RN' ");
+		queryBuilder.append(" AND upper(rc.TIPO_PRESTADOR_SOC) NOT LIKE '%HOSPITAL%' ");
+
+		queryBuilder.append(" ) WHERE linha BETWEEN (:offset + 1) AND (:offset + 10) ");
+		parameters.addValue("offset", offset);
+
+		List<RedeCredenciadaFavoritos> credenciados = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(),parameters, new RowMapper<RedeCredenciadaFavoritos>() {
+			@Override
+			public RedeCredenciadaFavoritos mapRow(ResultSet rs, int rowNum) throws SQLException {
+				RedeCredenciadaFavoritos r = new RedeCredenciadaFavoritos();
+
+				r.setId(rs.getLong("ID"));
+				r.setFavorito(true);
+				r.setIdRedeCredenciada(rs.getLong("ID_REDE_CREDENCIADA"));
+				r.setIdUsuario(rs.getLong("ID_USUARIO"));
+				r.setPrestador(rs.getString("PRESTADOR"));			    
+				
+				return r;
+			}
+		});
+		return credenciados;
+	}
+
+	@Override
+	public List<RedeCredenciadaFavoritos> getFavoritosEletivaForaRNByUsuario(Long idUsuario, Integer offset){
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT * FROM ( "
+		+ " SELECT row_number() OVER (ORDER BY rcf.prestador ASC) linha, rcf.* FROM REDE_CREDENCIADA_FAVORITOS rcf "
+		+ " INNER JOIN REDE_CREDENCIADA rc ON rcf.ID_REDE_CREDENCIADA = rc.ID WHERE rc.cpfcnpj IS NOT NULL ");
+
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+
+		queryBuilder.append(" AND rcf.favorito=1 and rcf.id_usuario =:idUsuario ");
+		parameters.addValue("idUsuario", idUsuario);
+
+		queryBuilder.append(" AND upper(rc.UF) != 'RN' ");
+		queryBuilder.append(" AND upper(rc.TIPO_PRESTADOR_SOC) NOT LIKE '%HOSPITAL%' ");
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(int i=0; i<municipioCassiDesativados.size(); i++){
+			queryBuilder.append(" AND (UPPER(rc.MUNICIPIO) != UPPER(:municipioDesativado" + i + ") OR UPPER(rc.UF) != UPPER(:municipioUfDesativado" + i + "))");
+			parameters.addValue("municipioDesativado" + i, municipioCassiDesativados.get(i).getMunicipio());
+			parameters.addValue("municipioUfDesativado" + i, municipioCassiDesativados.get(i).getUf());
+		}
+
+		queryBuilder.append(" ) WHERE linha BETWEEN (:offset + 1) AND (:offset + 10) ");
+		parameters.addValue("offset", offset);
+
+		List<RedeCredenciadaFavoritos> credenciados = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(),parameters, new RowMapper<RedeCredenciadaFavoritos>() {
+			@Override
+			public RedeCredenciadaFavoritos mapRow(ResultSet rs, int rowNum) throws SQLException {
+				RedeCredenciadaFavoritos r = new RedeCredenciadaFavoritos();
+
+				r.setId(rs.getLong("ID"));
+				r.setFavorito(true);
+				r.setIdRedeCredenciada(rs.getLong("ID_REDE_CREDENCIADA"));
+				r.setIdUsuario(rs.getLong("ID_USUARIO"));
+				r.setPrestador(rs.getString("PRESTADOR"));			    
+				
+				return r;
+			}
+		});
+		return credenciados;
+	}
+
+    @Override
+	public List<RedeCredenciada> findAllByFiltro(RedeCredenciadaFiltro filtro, Integer offset) {
+		
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT * FROM ( "
+		+ " SELECT row_number() OVER (ORDER BY rc.prestador ASC) linha, rc.* FROM rede_credenciada rc WHERE rc.cpfcnpj IS NOT NULL ");
+
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+
+		if(!Objects.isNull(filtro.getEspecialidade()) && !Objects.isNull(filtro.getEspecialidade().getNome())) {
+			/*
+			 * Comparar se a especialidade filtrada faz parte da lista de especialidades da Rede Credenciada.
+			 */
+			queryBuilder.append(" AND (rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade || ' ' || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade || ' ' || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade || ' ' || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER(:especialidade || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER(:especialidade || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER(:especialidade || ' ' || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade) ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade) ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade) ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES = :especialidade) ");
+			parameters.addValue("especialidade", filtro.getEspecialidade().getNome());
+		}
+		if(!Objects.isNull(filtro.getMunicipio())) {
+			if(!Objects.isNull(filtro.getMunicipio().getNome())){
+				queryBuilder.append(" AND upper(utl_raw.cast_to_varchar2((nlssort(rc.MUNICIPIO, 'nls_sort=binary_ai')))) = upper(utl_raw.cast_to_varchar2((nlssort(:nomeMunicipio, 'nls_sort=binary_ai'))))");
+				parameters.addValue("nomeMunicipio", filtro.getMunicipio().getNome().toUpperCase());
+			}
+			if(!Objects.isNull(filtro.getMunicipio().getUf())) {
+				queryBuilder.append(" AND rc.UF =:uf ");
+				parameters.addValue("uf", filtro.getMunicipio().getUf());
+			}
+    	}
+		if(!Objects.isNull(filtro.getTipoPrestadorSoc())) {
+			if(!Objects.isNull(filtro.getTipoPrestadorSoc().getDescricao())){
+				queryBuilder.append(" AND rc.TIPO_PRESTADOR_SOC LIKE UPPER('%' || :descricaoPrestador || '%') ");
+				parameters.addValue("descricaoPrestador", filtro.getTipoPrestadorSoc().getDescricao());
+			}
+		}
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(int i=0; i<municipioCassiDesativados.size(); i++){
+			queryBuilder.append(" AND (UPPER(rc.MUNICIPIO) != UPPER(:municipioDesativado" + i + ") OR UPPER(rc.UF) != UPPER(:municipioUfDesativado" + i + "))");
+			parameters.addValue("municipioDesativado" + i, municipioCassiDesativados.get(i).getMunicipio());
+			parameters.addValue("municipioUfDesativado" + i, municipioCassiDesativados.get(i).getUf());
+		}
+
+		//Paginação: 10 itens por página.
+		queryBuilder.append(" ) WHERE linha BETWEEN (:offset + 1) AND (:offset + 10) ");
+		parameters.addValue("offset", offset);
+
+		List<RedeCredenciada> credenciados = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(),parameters, new RowMapper<RedeCredenciada>() {
+			@Override
+			public RedeCredenciada mapRow(ResultSet rs, int rowNum) throws SQLException {
+				RedeCredenciada r = new RedeCredenciada();
+
+                r.setBairro(rs.getString("BAIRRO"));
+                r.setCep(rs.getString("CEP"));
+                r.setCnes(rs.getString("CNES"));
+                r.setCpfcnpj(rs.getString("CPFCNPJ"));
+                r.setEspecialidades(rs.getString("ESPECIALIDADES"));
+				r.setId(rs.getLong("ID"));
+                r.setLogradouro(rs.getString("LOGRADOURO"));
+                r.setMunicipio(rs.getString("MUNICIPIO"));
+                r.setPrestador(rs.getString("PRESTADOR"));
+                r.setPrestadorNomeFantasia(rs.getString("PRESTADOR_NOME_FANTASIA"));
+                r.setTelefone1(rs.getString("TELEFONE1"));
+                r.setTelefone2(rs.getString("TELEFONE2"));
+                r.setTipoPrestadorSOC(rs.getString("TIPO_PRESTADOR_SOC"));
+                r.setUf(rs.getString("UF"));			    
+				
+				RedeCredenciadaFavoritos f = redeCredenciadaFavoritosRepository.verificaFavorito(r.getId(), filtro.getIdUsuario());
+				if(f== null) {
+					r.setFavorito(false);
+				}else {
+					r.setFavorito(f.getFavorito());
+				}
+				
+				return r;
+			}
+		});
+		return credenciados;
+		
+	}
+
+    @Override
+	public List<RedeCredenciada> findAllByFiltroEletivo(RedeCredenciadaFiltro filtro, Integer offset) {
+		
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT * FROM ( "
+		+ " SELECT row_number() OVER (ORDER BY rc.prestador ASC) linha, rc.* FROM rede_credenciada rc WHERE rc.cpfcnpj IS NOT NULL ");
+
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+
+		if(!Objects.isNull(filtro.getEspecialidade()) && !Objects.isNull(filtro.getEspecialidade().getNome())) {
+			/*
+			 * Comparar se a especialidade filtrada faz parte da lista de especialidades da Rede Credenciada.
+			 */
+			queryBuilder.append(" AND (rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade || ' ' || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade || ' ' || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade || ' ' || ' ' || '/' || '%')");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER(:especialidade || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER(:especialidade || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER(:especialidade || ' ' || ' ' || '/' || '%') ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || :especialidade) ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || :especialidade) ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || :especialidade) ");
+			queryBuilder.append(" OR rc.ESPECIALIDADES = :especialidade) ");
+			parameters.addValue("especialidade", filtro.getEspecialidade().getNome());
+		}
+		if(!Objects.isNull(filtro.getMunicipio())) {
+			if(!Objects.isNull(filtro.getMunicipio().getNome())){
+				queryBuilder.append(" AND upper(utl_raw.cast_to_varchar2((nlssort(rc.MUNICIPIO, 'nls_sort=binary_ai')))) = upper(utl_raw.cast_to_varchar2((nlssort(:nomeMunicipio, 'nls_sort=binary_ai'))))");
+				parameters.addValue("nomeMunicipio", filtro.getMunicipio().getNome().toUpperCase());
+			}
+			if(!Objects.isNull(filtro.getMunicipio().getUf())) {
+				queryBuilder.append(" AND rc.UF =:uf ");
+				parameters.addValue("uf", filtro.getMunicipio().getUf());
+			}
+    	}
+		queryBuilder.append(" AND upper(rc.TIPO_PRESTADOR_SOC) NOT LIKE '%HOSPITAL%' ");
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(int i=0; i<municipioCassiDesativados.size(); i++){
+			queryBuilder.append(" AND (UPPER(rc.MUNICIPIO) != UPPER(:municipioDesativado" + i + ") OR UPPER(rc.UF) != UPPER(:municipioUfDesativado" + i + "))");
+			parameters.addValue("municipioDesativado" + i, municipioCassiDesativados.get(i).getMunicipio());
+			parameters.addValue("municipioUfDesativado" + i, municipioCassiDesativados.get(i).getUf());
+		}
+
+		//Paginação: 10 itens por página.
+		queryBuilder.append(" ) WHERE linha BETWEEN (:offset + 1) AND (:offset + 10) ");
+		parameters.addValue("offset", offset);
+
+		List<RedeCredenciada> credenciados = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(),parameters, new RowMapper<RedeCredenciada>() {
+			@Override
+			public RedeCredenciada mapRow(ResultSet rs, int rowNum) throws SQLException {
+				RedeCredenciada r = new RedeCredenciada();
+
+                r.setBairro(rs.getString("BAIRRO"));
+                r.setCep(rs.getString("CEP"));
+                r.setCnes(rs.getString("CNES"));
+                r.setCpfcnpj(rs.getString("CPFCNPJ"));
+                r.setEspecialidades(rs.getString("ESPECIALIDADES"));
+				r.setId(rs.getLong("ID"));
+                r.setLogradouro(rs.getString("LOGRADOURO"));
+                r.setMunicipio(rs.getString("MUNICIPIO"));
+                r.setPrestador(rs.getString("PRESTADOR"));
+                r.setPrestadorNomeFantasia(rs.getString("PRESTADOR_NOME_FANTASIA"));
+                r.setTelefone1(rs.getString("TELEFONE1"));
+                r.setTelefone2(rs.getString("TELEFONE2"));
+                r.setTipoPrestadorSOC(rs.getString("TIPO_PRESTADOR_SOC"));
+                r.setUf(rs.getString("UF"));			    
+				
+				RedeCredenciadaFavoritos f = redeCredenciadaFavoritosRepository.verificaFavorito(r.getId(), filtro.getIdUsuario());
+				if(f== null) {
+					r.setFavorito(false);
+				}else {
+					r.setFavorito(f.getFavorito());
+				}
+				
+				return r;
+			}
+		});
+		return credenciados;
+		
+	}
+
+    @Override
+	public List<TipoPrestadorSoc> findAllTipoPrestadorSocByFiltro(RedeCredenciadaFiltro filtro) {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT tps.ID, tps.DESCRICAO FROM TIPO_PRESTADOR_SOC tps ");
+		queryBuilder.append("INNER JOIN REDE_CREDENCIADA rc ON rc.TIPO_PRESTADOR_SOC LIKE ('%' || tps.DESCRICAO || '%') ");
+		queryBuilder.append("WHERE ativo=1 ");
+
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+
+		if(!Objects.isNull(filtro.getMunicipio())) {
+			if(!Objects.isNull(filtro.getMunicipio().getNome())){
+				queryBuilder.append("AND upper(utl_raw.cast_to_varchar2((nlssort(rc.MUNICIPIO, 'nls_sort=binary_ai')))) = upper(utl_raw.cast_to_varchar2((nlssort(:nomeMunicipio, 'nls_sort=binary_ai')))) ");
+				parameters.addValue("nomeMunicipio", filtro.getMunicipio().getNome().toUpperCase());
+			}
+			if(!Objects.isNull(filtro.getMunicipio().getUf())) {
+				queryBuilder.append("AND rc.UF = :uf ");
+				parameters.addValue("uf", filtro.getMunicipio().getUf());
+			}
+    	}
+		
+		queryBuilder.append("GROUP BY tps.ID, tps.DESCRICAO ORDER BY tps.DESCRICAO");
+
+		List<TipoPrestadorSoc> tiposPrestadores = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(),parameters, new RowMapper<TipoPrestadorSoc>() {
+			@Override
+			public TipoPrestadorSoc mapRow(ResultSet rs, int rowNum) throws SQLException {
+				TipoPrestadorSoc tps = new TipoPrestadorSoc();
+
+				tps.setId(rs.getLong("ID"));
+				tps.setDescricao(rs.getString("DESCRICAO"));
+				
+				return tps;
+			}
+		});
+		return tiposPrestadores;
+	}
+
+    @Override
+	public List<EspecialidadeCassi> findEspecialidadeByNameAndFiltro(RedeCredenciadaFiltro filtro, String term) {
+		StringBuilder queryBuilder = new StringBuilder();
+		queryBuilder.append("SELECT ec.ID, ec.NOME FROM ESPECIALIDADES_CASSI ec INNER JOIN REDE_CREDENCIADA rc ");
+		queryBuilder.append("ON (rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ec.NOME || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ec.NOME || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ec.NOME || ' ' || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ec.NOME || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ec.NOME || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ec.NOME || ' ' || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || ec.NOME || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || ec.NOME || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || ec.NOME || ' ' || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER(ec.NOME || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER(ec.NOME || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER(ec.NOME || ' ' || ' ' || '/' || '%') ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ec.NOME) ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ec.NOME) ");
+		queryBuilder.append("OR rc.ESPECIALIDADES LIKE UPPER('%' || '/' || ' ' || ' ' || ec.NOME) ");
+		queryBuilder.append("OR rc.ESPECIALIDADES = ec.NOME) ");
+
+		queryBuilder.append("WHERE ativo=1 ");
+
+		MapSqlParameterSource parameters = new MapSqlParameterSource();
+
+		if(!Objects.isNull(filtro.getMunicipio())) {
+			if(!Objects.isNull(filtro.getMunicipio().getNome())){
+				queryBuilder.append("AND upper(utl_raw.cast_to_varchar2((nlssort(rc.MUNICIPIO, 'nls_sort=binary_ai')))) = upper(utl_raw.cast_to_varchar2((nlssort(:nomeMunicipio, 'nls_sort=binary_ai')))) ");
+				parameters.addValue("nomeMunicipio", filtro.getMunicipio().getNome().toUpperCase());
+			}
+			if(!Objects.isNull(filtro.getMunicipio().getUf())) {
+				queryBuilder.append("AND rc.UF = :uf ");
+				parameters.addValue("uf", filtro.getMunicipio().getUf());
+			}
+    	}
+		if(!Objects.isNull(filtro.getTipoPrestadorSoc())) {
+			if(!Objects.isNull(filtro.getTipoPrestadorSoc().getDescricao())){
+				queryBuilder.append("AND rc.TIPO_PRESTADOR_SOC LIKE UPPER('%' || :descricaoPrestador || '%') ");
+				parameters.addValue("descricaoPrestador", filtro.getTipoPrestadorSoc().getDescricao());
+			}
+    	}
+
+		List<MunicipioCassiDesativado> municipioCassiDesativados = municipioCassiDesativadoRepository.findAll();
+		for(int i=0; i<municipioCassiDesativados.size(); i++){
+			queryBuilder.append(" AND (UPPER(rc.MUNICIPIO) != UPPER(:municipioDesativado" + i + ") OR UPPER(rc.UF) != UPPER(:municipioUfDesativado" + i + "))");
+			parameters.addValue("municipioDesativado" + i, municipioCassiDesativados.get(i).getMunicipio());
+			parameters.addValue("municipioUfDesativado" + i, municipioCassiDesativados.get(i).getUf());
+		}		
+
+		queryBuilder.append("AND UPPER(ec.NOME) LIKE UPPER('%' || :term || '%') ");
+		parameters.addValue("term", term);
+
+		queryBuilder.append("GROUP BY ec.ID, ec.NOME ORDER BY case when ec.NOME LIKE UPPER(:term || '%') then 0 else 1 END, ec.NOME ");
+
+		List<EspecialidadeCassi> especialidades = new NamedParameterJdbcTemplate(dt).query(queryBuilder.toString(),parameters, new RowMapper<EspecialidadeCassi>() {
+			@Override
+			public EspecialidadeCassi mapRow(ResultSet rs, int rowNum) throws SQLException {
+				EspecialidadeCassi e = new EspecialidadeCassi();
+
+				e.setId(rs.getLong("ID"));
+				e.setNome(rs.getString("NOME"));
+				
+				return e;
+			}
+		});
+		return especialidades;
+	}
+}

@@ -1,0 +1,10 @@
+package br.ufrn.imd.solicitacaurn.cassi.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import br.com.mkapi.cassi.domain.MunicipioCassiDesativado;
+
+@Repository
+public interface MunicipioCassiDesativadoRepository extends JpaRepository<MunicipioCassiDesativado, Long>{
+}

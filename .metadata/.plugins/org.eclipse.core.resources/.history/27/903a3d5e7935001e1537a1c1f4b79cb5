@@ -1,0 +1,33 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.GuiaAutorizadaPDF;
+
+import java.util.List;
+
+public interface GuiaAutorizadaPDFRepository extends JpaRepository<GuiaAutorizadaPDF, Long>{
+    @Query(value = "SELECT * FROM AG_VW_GUIATISS veg\r\n"
+    + " WHERE veg.guia = ?1\r\n", nativeQuery = true)
+    public GuiaAutorizadaPDF getEmissaoGuiaLiberadaByNumGuia(Long numGuia);
+
+    @Query(value = "SELECT * FROM (\r\n"
+    + " SELECT row_number() OVER (ORDER BY TO_DATE(veg.CAMPO4, 'DD/MM/YYYY') DESC) linha, veg.*\r\n"
+    + " FROM AG_VW_GUIATISS veg \r\n"
+    + " WHERE veg.campo8 = ?1\r\n"
+    + ") WHERE linha BETWEEN (?2 + 1) AND (?2 + 10)", nativeQuery = true)
+    public List<GuiaAutorizadaPDF> getEmissaoGuiaLiberadaByBeneficiario(String codigoBeneficiario, Integer offset);
+
+    @Query(value = "SELECT * FROM (\r\n"
+    + " SELECT row_number() OVER (ORDER BY TO_DATE(veg.CAMPO4, 'DD/MM/YYYY') DESC) linha, veg.*\r\n"
+    + " FROM AG_VW_GUIATISS veg \r\n"
+    + " INNER JOIN VW_BENEFICIARIO vb ON veg.campo8 = vb.CODIGO_BENEFICIARIO \r\n"
+    + " WHERE ((veg.campo8 = ?1 \r\n"
+    + " OR ((vb.CPF_TITULAR = ?2 \r\n"
+    + " AND (SELECT DISTINCT months_between(TRUNC(sysdate), vb.DATA_NASC_BENEFICIARIO)/12 as age from dual) < 18) \r\n"
+    + " AND (UPPER(vb.TIPO_BENEFICIARIO) = 'DEPENDENTE' OR UPPER(vb.TIPO_BENEFICIARIO) = 'AGREGADO')))) \r\n"
+    + ") WHERE linha BETWEEN (?3 + 1) AND (?3 + 10)", nativeQuery = true)
+    public List<GuiaAutorizadaPDF> getEmissaoGuiaFamiliaLiberadaByBeneficiario(String codigoBeneficiario, String cpfTitular, Integer offset);  
+
+}

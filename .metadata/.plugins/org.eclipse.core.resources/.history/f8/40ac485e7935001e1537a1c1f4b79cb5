@@ -1,0 +1,48 @@
+package br.ufrn.imd.solicitacaurn.solus.repository;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import br.com.mkapi.solus.domain.DmedPagamentos;
+
+public interface DmedPagamentosSolusRepository extends JpaRepository<DmedPagamentos, Long> {
+	
+	@Query(value = "SELECT vw.* FROM vw_dmed_pagamentos vw " +
+			" WHERE chave_beneficiario = ?1", nativeQuery = true)
+			public List<DmedPagamentos> findAllByBeneficiario(Long chaveBeneficiario);
+	
+	@Query(value = "SELECT vw.* FROM vw_dmed_pagamentos vw " +
+			" WHERE chave_familia = ?1", nativeQuery = true)
+			public List<DmedPagamentos> findAllByTitular(Long chaveTitular);
+	
+	@Query(value="select distinct vw.ano_dmed from vw_dmed_pagamentos vw " + 
+			"where vw.chave_beneficiario = ?1 order by vw.ano_dmed desc "
+			,nativeQuery = true)
+	public List<Long> findAnoByBeneficiario(Long chaveBeneficiario);
+	
+	@Query(value="select distinct vw.ano_dmed from vw_dmed_pagamentos vw " + 
+			"where vw.chave_familia = ?1 order by vw.ano_dmed desc "
+			,nativeQuery = true)
+	public List<Long> findAnoByTitular(Long chaveFamilia);
+	
+	@Query(value="select vw.* from vw_dmed_pagamentos vw " + 
+			"where vw.chave_familia = ?1 and vw.ano_dmed = ?2 "
+			,nativeQuery = true)
+	public List<DmedPagamentos> findAllByTitularCompetencia(Long chaveTitular, Long anoDmed);
+	
+	@Query(value="select vw.* from vw_dmed_pagamentos vw " + 
+			"where vw.chave_beneficiario = ?1 and vw.ano_dmed = ?2 "
+			,nativeQuery = true)
+	public List<DmedPagamentos> findAllByBeneficiarioCompetencia(Long chaveBeneficiario, Long anoDmed);
+	
+	@Query(value="select vw.cpf_resppagador as cpfRespPagador, vw.resp_pagador as respPagador, To_char(vw.data_vencimento,'yyyy-MM-dd\"T\"HH24:MI:SS') as dataVencimento, To_char(vw.data_pagamento,'yyyy-MM-dd\"T\"HH24:MI:SS') as dataPagamento, SUM(vw.valor_pago_beneficiario) as totalPorMes "
+			+ "from  vw_dmed_pagamentos vw where vw.chave_familia = ?1 and vw.ano_dmed = ?2 "
+			+ "group by vw.data_vencimento,vw.data_pagamento, vw.cpf_resppagador,vw.resp_pagador order by vw.data_pagamento asc "
+			,nativeQuery = true)
+	public List<Map<String,Object>> findDmedByTitularCompetencia(Long chaveTitular, Long anoDmed);
+	
+
+}
