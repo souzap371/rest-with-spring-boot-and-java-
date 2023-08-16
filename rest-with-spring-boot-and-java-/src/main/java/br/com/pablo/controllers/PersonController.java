@@ -18,15 +18,32 @@ import br.com.pablo.data.vo.v1.PersonVO;
 import br.com.pablo.data.vo.v2.PersonVOV2;
 import br.com.pablo.services.PersonServices;
 import br.com.pablo.util.MediaType;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/person/v1")
+@Tag(name = "People", description = "Endpoints for Managing People")
 public class PersonController {
 	
 	@Autowired
 	private PersonServices service;
 		
 	@GetMapping(produces = {MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML, MediaType.APPLICATION_YML})
+	@Operation(summary = "Finds all People", description = "Finds all People",
+		tags = {"People"},
+		responses = {
+			@ApiResponse(description = "Success", responseCode = "200", 
+					content = {
+							@Content(
+									
+							)
+					}),
+			@ApiResponse(description = "Success", responseCode = "200", content = {@Content})
+		}
+	)
 	public List<PersonVO> findAll() {
 		return service.findAll();
 	}
